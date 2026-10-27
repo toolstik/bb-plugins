@@ -1,0 +1,1 @@
+Statusline puts a compact status bar above the composer of every thread: how full the context window is, in percent and tokens, and how much of the provider's 5-hour and weekly subscription windows is used, with the time each one resets. Each value is green, yellow or red by the same thresholds as the Claude Code status line. Hover a segment for exact numbers.
