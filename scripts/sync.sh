@@ -16,7 +16,7 @@ BB="${BB_CLI:-bb}"
 repo=$(cd "$(dirname "$0")/.." && pwd)
 
 list=$("$BB" plugin list --json)
-outdated=$("$BB" plugin outdated --json | jq -r '.[] | select(.outcome == "available") | .id')
+outdated=$("$BB" plugin outdated --json | jq -r '.[] | select(.outcome == "update-available") | .id')
 failed=0
 
 run() {
