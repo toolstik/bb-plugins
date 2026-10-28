@@ -16,15 +16,14 @@
 
 ## Новый компьютер
 
-Репозиторий приватный, поэтому сначала нужен доступ git к GitHub:
+Репозиторий публичный, для чтения авторизация в GitHub не нужна:
 
 ```sh
-brew install gh
-gh auth login -h github.com
-gh auth setup-git
-gh repo clone toolstik/bb-plugins ~/src/bb-plugins
+git clone https://github.com/toolstik/bb-plugins.git ~/src/bb-plugins
 ~/src/bb-plugins/scripts/setup.sh
 ```
+
+Авторизация (`gh auth login` и `gh auth setup-git`) нужна только на машине, с которой пушишь изменения.
 
 `setup.sh` ставит все плагины из git, выставляет шорткаты для `new-chat-personal` и создаёт в bb автоматизацию "Sync bb plugins" (проект Personal, каждый час в :17). Автоматизация берёт свежий `main` и запускает `scripts/sync.sh`: он ставит новые плагины, обновляет изменившиеся и ничего не печатает, если менять нечего.
 
