@@ -8,7 +8,7 @@ Installs and updates the plugins listed in a GitHub repository (default `toolsti
 bb plugin install git:https://github.com/toolstik/bb-plugins.git@main --subdirectory plugins/plugin-sync
 ```
 
-Then open Settings → Plugin Sync and press **Sync**, or run `bb plugin-sync sync`.
+Then open Settings → Plugin Sync and press **Apply**, or run `bb plugin-sync apply`.
 
 ## Repository format
 
@@ -17,7 +17,7 @@ Then open Settings → Plugin Sync and press **Sync**, or run `bb plugin-sync sy
 
 ```json
 {
-  "external": [{ "id": "handoff", "source": "git:https://github.com/vburojevic/bb-plugin-handoff.git@semver:^0.7.0" }],
+  "external": [{ "id": "some-plugin", "source": "git:https://github.com/owner/bb-plugin-some.git@semver:^1.0.0" }],
   "keyboard": [
     { "command": "thread.new", "shortcut": null },
     { "command": "plugin:new-chat-personal/new-chat", "shortcut": { "key": "O", "mod": true, "shift": true } }

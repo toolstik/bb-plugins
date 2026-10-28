@@ -19,15 +19,15 @@
 bb plugin install git:https://github.com/toolstik/bb-plugins.git@main --subdirectory plugins/plugin-sync
 ```
 
-Затем Settings → Plugin Sync → **Sync**. Он ставит все плагины из `.bb/plugins.json` и сторонние из `sync.json` и выставляет шорткаты из `sync.json`.
+Затем Settings → Plugin Sync → **Apply**. Кнопка ставит недостающие плагины из `.bb/plugins.json`, выставляет шорткаты из `sync.json` и обновляет устаревшие плагины. У каждого устаревшего плагина есть и своя кнопка **Update**.
 
-Дальше `plugin-sync` раз в час проверяет репозиторий. Если появились новые плагины, обновления или расходятся шорткаты, в bb один раз всплывает уведомление с кнопками **Apply** и **Later**. Сам он ничего не ставит и не обновляет. Те же действия есть в настройках плагина и в CLI: `bb plugin-sync status|sync|update`.
+Дальше `plugin-sync` раз в час проверяет репозиторий. Если появились новые плагины, обновления или расходятся шорткаты, в bb один раз всплывает уведомление с кнопками **Apply** и **Later**. Сам он ничего не ставит и не обновляет. Те же действия есть в настройках плагина и в CLI: `bb plugin-sync status`, `bb plugin-sync apply`, `bb plugin-sync update <id>`.
 
 ## Что где лежит
 
 - `plugins/<id>/`: исходники плагинов. Имя каталога и `name` в `.bb/plugins.json` совпадают с id плагина.
 - `.bb/plugins.json`: список своих плагинов, они ставятся из git с отслеживанием `main`.
-- `sync.json`: сторонние плагины (`external`, id и источник для `bb plugin install`) и переопределения шорткатов (`keyboard`).
+- `sync.json`: переопределения шорткатов (`keyboard`). Сюда же можно добавить чужие плагины, которые нужны на всех машинах: `external`, массив из id и источника для `bb plugin install`.
 
 ## Разработка
 

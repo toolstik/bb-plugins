@@ -1,4 +1,4 @@
-// bb-plugin-plugin-sync frontend: the settings section with the Sync and Update buttons,
+// bb-plugin-plugin-sync frontend: the settings section with the Apply button,
 // and an app-wide toast that announces new changes once per set of changes.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { definePluginApp, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
@@ -34,7 +34,7 @@ function counts(status: SyncStatus) {
   const missing = status.plugins.filter((p) => p.state === "missing").length;
   const updates = status.plugins.filter((p) => p.state === "update").length;
   const keyboard = status.keyboard.filter((k) => !k.applied).length;
-  return { missing, updates, keyboard, syncable: missing + keyboard };
+  return { missing, updates, keyboard, total: missing + updates + keyboard };
 }
 
 function summary(status: SyncStatus): string {
@@ -51,24 +51,6 @@ function reportResult(result: ActionResult) {
   for (const failure of result.failed) toast.error(`${failure.id}: ${failure.error}`);
   if (result.done.length > 0) toast.success(result.done.join("\n"));
   else if (result.failed.length === 0) toast("Nothing to do");
-}
-
-type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;
-
-/** Sync first (new plugins, shortcuts), then updates; both only when needed. */
-async function applyAll(rpc: Rpc, status: SyncStatus): Promise<ActionResult> {
-  const { syncable, updates } = counts(status);
-  const result: ActionResult = { done: [], failed: [] };
-  for (const run of [
-    syncable > 0 ? () => rpc.call("sync") : null,
-    updates > 0 ? () => rpc.call("update", {}) : null,
-  ]) {
-    if (run === null) continue;
-    const next = await run();
-    result.done.push(...next.done);
-    result.failed.push(...next.failed);
-  }
-  return result;
 }
 
 const STATE_LABEL: Record<PluginEntry["state"], string> = {
@@ -148,23 +130,15 @@ function SettingsSection() {
   if (status === null) {
     return <p className="text-sm text-muted-foreground">{error ?? "Loading…"}</p>;
   }
-  const { syncable, updates } = counts(status);
+  const { total } = counts(status);
   const pending = summary(status);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={busy || syncable === 0} onClick={() => run("sync", () => rpc.call("sync"))}>
+        <Button disabled={busy || total === 0} onClick={() => run("apply", () => rpc.call("apply"))}>
           <Icon name="Download" className="size-4" />
-          {running === "sync" ? "Syncing…" : "Sync"}
-        </Button>
-        <Button
-          variant="outline"
-          disabled={busy || updates === 0}
-          onClick={() => run("update", () => rpc.call("update", {}))}
-        >
-          <Icon name="ArrowUpCircle" className="size-4" />
-          {running === "update" ? "Updating…" : updates > 1 ? `Update all (${updates})` : "Update"}
+          {running === "apply" ? "Applying…" : total > 0 ? `Apply (${total})` : "Apply"}
         </Button>
         <Button variant="ghost" disabled={busy} onClick={() => run("check", () => rpc.call("check"))}>
           <Icon name="RefreshCw" className="size-4" />
@@ -252,7 +226,7 @@ function ChangesToast() {
         label: "Apply",
         onClick: () => {
           acknowledge();
-          applyAll(rpc, status).then(reportResult, (cause) => toast.error(errorText(cause)));
+          rpc.call("apply").then(reportResult, (cause) => toast.error(errorText(cause)));
         },
       },
       cancel: { label: "Later", onClick: acknowledge },
@@ -266,7 +240,8 @@ export default definePluginApp((app) => {
   app.slots.settingsSection({
     id: "sync",
     title: "Plugin repository",
-    description: "Install and update plugins listed in the repository. Nothing changes until you press a button.",
+    description:
+      "Apply installs missing plugins, sets the listed shortcuts, and updates outdated plugins. Nothing changes until you press it.",
     component: SettingsSection,
   });
   app.slots.experimental_appOverlay({

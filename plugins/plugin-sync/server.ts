@@ -4,7 +4,7 @@
 // --subdirectory) and, in sync.json, third-party plugins and keyboard overrides the
 // plugins need. Nothing changes on its own: an hourly check records what differs, the
 // app shows a toast once per new set of changes, and the settings section (app.tsx)
-// has the Sync and Update buttons.
+// has the Apply button.
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
@@ -33,7 +33,7 @@ const pluginEntrySchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
   kind: z.enum(["own", "external"]),
-  // missing: Sync installs it. update: the source has a newer version, Update applies it.
+  // missing: not installed. update: the source has a newer version. Apply handles both.
   // local: installed from a local path, a working copy left alone.
   // other-source: the id is installed from somewhere else, left alone.
   // broken: installed but not running.
@@ -69,8 +69,8 @@ export type ActionResult = z.infer<typeof actionResultSchema>;
 export const rpcContract = defineRpcContract({
   status: { input: z.null(), output: statusSchema },
   check: { input: z.null(), output: statusSchema },
-  sync: { input: z.null(), output: actionResultSchema },
-  update: { input: z.object({ id: z.string().optional() }), output: actionResultSchema },
+  apply: { input: z.null(), output: actionResultSchema },
+  update: { input: z.object({ id: z.string().min(1) }), output: actionResultSchema },
   acknowledge: { input: z.object({ signature: z.string() }), output: z.null() },
 });
 
@@ -272,7 +272,7 @@ export default async function plugin(bb: BbPluginApi) {
   }
 
   async function exclusive(work: () => Promise<ActionResult>): Promise<ActionResult> {
-    if (busy) throw new Error("Another sync or update is still running");
+    if (busy) throw new Error("Another apply or update is still running");
     busy = true;
     if (lastStatus !== null) lastStatus = { ...lastStatus, busy };
     bb.realtime.publish(STATUS_CHANGED, { busy });
@@ -284,83 +284,100 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
-  /** Installs missing plugins and applies keyboard overrides. Never updates or removes. */
-  function sync(): Promise<ActionResult> {
-    return exclusive(async () => {
-      const manifest = await readManifest();
-      const { plugins: installed } = await bb.sdk.plugins.list();
-      const have = new Set(installed.map((p) => p.id));
-      const result: ActionResult = { done: [], failed: [] };
-
-      const targets = [
-        ...manifest.own.map((p) => ({
-          id: p.id,
-          args: { source: p.source, subdirectory: p.subdirectory },
-        })),
-        ...manifest.external.map((p) => ({ id: p.id, args: { source: p.source } })),
-      ].filter((t) => !have.has(t.id));
-      for (const target of targets) {
-        try {
-          await bb.sdk.plugins.install(target.args);
-          result.done.push(`installed ${target.id}`);
-        } catch (cause) {
-          result.failed.push({ id: target.id, error: errorText(cause) });
-        }
-      }
-
+  async function installMissing(
+    manifest: Awaited<ReturnType<typeof readManifest>>,
+    result: ActionResult,
+  ): Promise<void> {
+    const { plugins: installed } = await bb.sdk.plugins.list();
+    const have = new Set(installed.map((p) => p.id));
+    const targets = [
+      ...manifest.own.map((p) => ({
+        id: p.id,
+        args: { source: p.source, subdirectory: p.subdirectory },
+      })),
+      ...manifest.external.map((p) => ({ id: p.id, args: { source: p.source } })),
+    ].filter((t) => !have.has(t.id));
+    for (const target of targets) {
       try {
-        const { keybindingOverrides } = await bb.sdk.system.config();
-        const general = (o: { platform?: string }) => o.platform === undefined;
-        const changed = manifest.keyboard.filter((k) => {
-          const current = keybindingOverrides.find((o) => o.command === k.command && general(o));
-          return !sameShortcut(current?.shortcut, k.shortcut);
-        });
-        if (changed.length > 0) {
-          const wanted = new Set(manifest.keyboard.map((k) => k.command));
-          const kept = keybindingOverrides.filter((o) => !(general(o) && wanted.has(o.command)));
-          const next = [
-            ...kept,
-            ...manifest.keyboard.map((k) => ({ command: k.command, shortcut: k.shortcut })),
-          ] as Parameters<typeof bb.sdk.system.updateKeyboardSettings>[0];
-          await bb.sdk.system.updateKeyboardSettings(next);
-          for (const k of changed) {
-            result.done.push(`shortcut ${k.command} → ${formatShortcut(k.shortcut)}`);
-          }
-        }
+        await bb.sdk.plugins.install(target.args);
+        result.done.push(`installed ${target.id}`);
       } catch (cause) {
-        result.failed.push({ id: "keyboard", error: errorText(cause) });
+        result.failed.push({ id: target.id, error: errorText(cause) });
       }
+    }
+  }
+
+  async function applyShortcuts(
+    manifest: Awaited<ReturnType<typeof readManifest>>,
+    result: ActionResult,
+  ): Promise<void> {
+    try {
+      const { keybindingOverrides } = await bb.sdk.system.config();
+      const general = (o: { platform?: string }) => o.platform === undefined;
+      const changed = manifest.keyboard.filter((k) => {
+        const current = keybindingOverrides.find((o) => o.command === k.command && general(o));
+        return !sameShortcut(current?.shortcut, k.shortcut);
+      });
+      if (changed.length === 0) return;
+      const wanted = new Set(manifest.keyboard.map((k) => k.command));
+      const kept = keybindingOverrides.filter((o) => !(general(o) && wanted.has(o.command)));
+      const next = [
+        ...kept,
+        ...manifest.keyboard.map((k) => ({ command: k.command, shortcut: k.shortcut })),
+      ] as Parameters<typeof bb.sdk.system.updateKeyboardSettings>[0];
+      await bb.sdk.system.updateKeyboardSettings(next);
+      for (const k of changed) {
+        result.done.push(`shortcut ${k.command} → ${formatShortcut(k.shortcut)}`);
+      }
+    } catch (cause) {
+      result.failed.push({ id: "keyboard", error: errorText(cause) });
+    }
+  }
+
+  async function applyUpdates(ids: string[], result: ActionResult): Promise<void> {
+    for (const pluginId of ids.filter((p) => p !== SELF_ID)) {
+      try {
+        const outcome = await bb.sdk.plugins.applyUpdate({ pluginId });
+        if (outcome.applied) result.done.push(`updated ${pluginId}`);
+        else result.failed.push({ id: pluginId, error: outcome.detail ?? outcome.outcome });
+      } catch (cause) {
+        result.failed.push({ id: pluginId, error: errorText(cause) });
+      }
+    }
+    // Updating this plugin reloads it, so it goes last and runs as a background job.
+    if (ids.includes(SELF_ID)) {
+      try {
+        await bb.sdk.plugins.experimental_startUpdate({ pluginId: SELF_ID });
+        result.done.push(`updating ${SELF_ID}, it reloads itself`);
+      } catch (cause) {
+        result.failed.push({ id: SELF_ID, error: errorText(cause) });
+      }
+    }
+  }
+
+  /** Brings this bb in line with the repository: installs, shortcuts, updates. Never removes. */
+  function apply(): Promise<ActionResult> {
+    return exclusive(async () => {
+      const result: ActionResult = { done: [], failed: [] };
+      const manifest = await readManifest();
+      await installMissing(manifest, result);
+      await applyShortcuts(manifest, result);
+      const status = await check();
+      const ids = status.plugins.filter((p) => p.state === "update").map((p) => p.id);
+      await applyUpdates(ids, result);
       return result;
     });
   }
 
-  /** Applies available updates: to one plugin, or to every listed plugin that has one. */
-  function update(id?: string): Promise<ActionResult> {
+  /** Updates one plugin only. */
+  function update(id: string): Promise<ActionResult> {
     return exclusive(async () => {
       const status = await check();
-      const ids = status.plugins
-        .filter((p) => p.state === "update" && (id === undefined || p.id === id))
-        .map((p) => p.id);
-      if (id !== undefined && ids.length === 0) throw new Error(`${id} has no update to apply`);
+      if (!status.plugins.some((p) => p.id === id && p.state === "update")) {
+        throw new Error(`${id} has no update to apply`);
+      }
       const result: ActionResult = { done: [], failed: [] };
-      for (const pluginId of ids.filter((p) => p !== SELF_ID)) {
-        try {
-          const outcome = await bb.sdk.plugins.applyUpdate({ pluginId });
-          if (outcome.applied) result.done.push(`updated ${pluginId}`);
-          else result.failed.push({ id: pluginId, error: outcome.detail ?? outcome.outcome });
-        } catch (cause) {
-          result.failed.push({ id: pluginId, error: errorText(cause) });
-        }
-      }
-      // Updating this plugin reloads it, so it goes last and runs as a background job.
-      if (ids.includes(SELF_ID)) {
-        try {
-          await bb.sdk.plugins.experimental_startUpdate({ pluginId: SELF_ID });
-          result.done.push(`updating ${SELF_ID}, it reloads itself`);
-        } catch (cause) {
-          result.failed.push({ id: SELF_ID, error: errorText(cause) });
-        }
-      }
+      await applyUpdates([id], result);
       return result;
     });
   }
@@ -371,7 +388,7 @@ export default async function plugin(bb: BbPluginApi) {
       return status == null ? buildStatus() : { ...status, busy };
     },
     check: () => check(),
-    sync: () => sync(),
+    apply: () => apply(),
     update: ({ id }) => update(id),
     acknowledge: async ({ signature }) => {
       await bb.storage.kv.set("acknowledged", signature);
@@ -388,8 +405,8 @@ export default async function plugin(bb: BbPluginApi) {
   const usage = [
     "Usage:",
     "  bb plugin-sync status [--json]         Re-check sources and show what differs",
-    "  bb plugin-sync sync [--json]           Install missing plugins, apply keyboard overrides",
-    "  bb plugin-sync update [<id>] [--json]  Apply available updates",
+    "  bb plugin-sync apply [--json]          Install missing plugins, apply shortcuts and updates",
+    "  bb plugin-sync update <id> [--json]    Update one plugin",
   ].join("\n");
 
   function formatStatus(status: SyncStatus): string {
@@ -420,14 +437,14 @@ export default async function plugin(bb: BbPluginApi) {
         usage: "bb plugin-sync status [--json]",
       },
       {
-        name: "sync",
-        summary: "Install missing plugins and apply keyboard overrides",
-        usage: "bb plugin-sync sync [--json]",
+        name: "apply",
+        summary: "Install missing plugins, apply shortcuts and updates",
+        usage: "bb plugin-sync apply [--json]",
       },
       {
         name: "update",
-        summary: "Apply available updates",
-        usage: "bb plugin-sync update [<id>] [--json]",
+        summary: "Update one plugin",
+        usage: "bb plugin-sync update <id> [--json]",
       },
     ],
     async run(argv) {
@@ -447,14 +464,15 @@ export default async function plugin(bb: BbPluginApi) {
             const status = await check();
             return reply(status, formatStatus(status), status.error !== null);
           }
-          case "sync": {
+          case "apply": {
             if (args.length > 0) break;
-            const result = await sync();
+            const result = await apply();
             return reply(result, formatResult(result), result.failed.length > 0);
           }
           case "update": {
-            if (args.length > 1) break;
-            const result = await update(args[0]);
+            const [id] = args;
+            if (id === undefined || args.length > 1) break;
+            const result = await update(id);
             return reply(result, formatResult(result), result.failed.length > 0);
           }
         }
