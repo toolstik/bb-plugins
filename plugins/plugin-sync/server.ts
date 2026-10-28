@@ -1,8 +1,8 @@
 // bb-plugin-plugin-sync: keeps this bb's plugin set in line with a GitHub repository.
 //
-// The repository lists its own plugins in .bb/plugins.json (installed from git with
-// --subdirectory) and, in sync.json, third-party plugins and keyboard overrides the
-// plugins need. Nothing changes on its own: an hourly check records what differs, the
+// The repository's marketplace.json lists the plugins (the same file bb's plugin store
+// reads after `bb marketplace add`), and sync.json lists keyboard overrides the plugins
+// need. Nothing changes on its own: an hourly check records what differs, the
 // app shows a toast once per new set of changes, and the settings section (app.tsx)
 // has the Apply button.
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
@@ -18,12 +18,36 @@ const shortcutSchema = z.object({
 });
 type Shortcut = z.infer<typeof shortcutSchema>;
 
-const collectionSchema = z.object({
-  plugins: z.array(z.object({ name: z.string().min(1), source: z.string().startsWith("./") })),
+// The parts of a marketplace.json entry this plugin uses; bb validates the rest.
+const marketplaceSchema = z.object({
+  plugins: z.array(
+    z.object({
+      id: z.string().min(1),
+      source: z.union([
+        z.object({
+          git: z.object({
+            url: z.string(),
+            subdir: z.string().optional(),
+            ref: z.string().optional(),
+            range: z.string().optional(),
+            tagPrefix: z.string().optional(),
+          }),
+        }),
+        z.object({
+          npm: z.object({
+            package: z.string(),
+            range: z.string().optional(),
+            tag: z.string().optional(),
+          }),
+        }),
+        z.object({ bundled: z.object({ plugin: z.string() }) }),
+      ]),
+    }),
+  ),
 });
+type MarketplaceSource = z.infer<typeof marketplaceSchema>["plugins"][number]["source"];
 
 const syncFileSchema = z.object({
-  external: z.array(z.object({ id: z.string().min(1), source: z.string().min(1) })).default([]),
   keyboard: z
     .array(z.object({ command: z.string().min(1), shortcut: shortcutSchema.nullable() }))
     .default([]),
@@ -105,10 +129,30 @@ function sameShortcut(a: Shortcut | null | undefined, b: Shortcut | null): boole
 
 /** A source without its ref or version: git:https://host/repo.git@main → https://host/repo.git */
 function sourceBase(source: string): string {
+  if (source.startsWith("npm:")) {
+    const name = source.slice(4);
+    const at = name.indexOf("@", 1);
+    return `npm:${at === -1 ? name : name.slice(0, at)}`;
+  }
   const bare = source.replace(/^git:/, "");
   const scheme = bare.indexOf("://");
   const at = bare.indexOf("@", scheme === -1 ? 1 : scheme + 3);
   return at === -1 ? bare : bare.slice(0, at);
+}
+
+/** `bb plugin install` arguments for a marketplace source; null for bundled plugins. */
+function installArgs(source: MarketplaceSource): { source: string; subdirectory?: string } | null {
+  if ("git" in source) {
+    const { url, subdir, ref, range, tagPrefix } = source.git;
+    const spec =
+      range !== undefined ? `@semver:${tagPrefix === undefined ? "" : `${tagPrefix}:`}${range}` : ref !== undefined ? `@${ref}` : "";
+    return { source: `git:${url}${spec}`, ...(subdir === undefined ? {} : { subdirectory: subdir }) };
+  }
+  if ("npm" in source) {
+    const version = source.npm.range ?? source.npm.tag;
+    return { source: `npm:${source.npm.package}${version === undefined ? "" : `@${version}`}` };
+  }
+  return null;
 }
 
 function errorText(cause: unknown): string {
@@ -120,7 +164,7 @@ export default async function plugin(bb: BbPluginApi) {
     repository: {
       type: "string",
       label: "GitHub repository",
-      description: "owner/name of the public repository with .bb/plugins.json and sync.json",
+      description: "owner/name of the public repository with marketplace.json and sync.json",
       default: "toolstik/bb-plugins",
       experimental_schema: z.string().regex(/^[\w.-]+\/[\w.-]+$/, "Use owner/name"),
     },
@@ -145,19 +189,27 @@ export default async function plugin(bb: BbPluginApi) {
 
   async function readManifest() {
     const { repository, branch } = await settings.get();
-    const [collection, syncFile] = await Promise.all([
-      fetchJson(repository, branch, ".bb/plugins.json"),
+    const [marketplace, syncFile] = await Promise.all([
+      fetchJson(repository, branch, "marketplace.json"),
       fetchJson(repository, branch, "sync.json"),
     ]);
-    if (collection === null) throw new Error(`${repository}@${branch} has no .bb/plugins.json`);
-    const source = `git:https://github.com/${repository}.git@${branch}`;
-    const own = collectionSchema.parse(collection).plugins.map((entry) => ({
-      id: entry.name,
-      source,
-      subdirectory: entry.source.slice(2).replace(/\/+$/, ""),
-    }));
-    const extra = syncFileSchema.parse(syncFile ?? {});
-    return { repository, branch, own, external: extra.external, keyboard: extra.keyboard };
+    if (marketplace === null) throw new Error(`${repository}@${branch} has no marketplace.json`);
+    const repoUrl = `https://github.com/${repository}.git`;
+    const plugins = marketplaceSchema.parse(marketplace).plugins.flatMap((entry) => {
+      const args = installArgs(entry.source);
+      if (args === null) return [];
+      const own = sourceBase(args.source) === repoUrl;
+      return [
+        {
+          id: entry.id,
+          kind: own ? ("own" as const) : ("external" as const),
+          args,
+          display: own && args.subdirectory !== undefined ? `${args.subdirectory} @ ${branch}` : args.source,
+        },
+      ];
+    });
+    const { keyboard } = syncFileSchema.parse(syncFile ?? {});
+    return { repository, branch, repoUrl, plugins, keyboard };
   }
 
   async function publish(
@@ -237,8 +289,7 @@ export default async function plugin(bb: BbPluginApi) {
     };
 
     const plugins = [
-      ...manifest.own.map((p) => describe(p.id, "own", `${p.subdirectory} @ ${branch}`, repoUrl)),
-      ...manifest.external.map((p) => describe(p.id, "external", p.source, sourceBase(p.source))),
+      ...manifest.plugins.map((p) => describe(p.id, p.kind, p.display, sourceBase(p.args.source))),
     ];
 
     const keyboard = manifest.keyboard.map((entry) => {
@@ -290,13 +341,7 @@ export default async function plugin(bb: BbPluginApi) {
   ): Promise<void> {
     const { plugins: installed } = await bb.sdk.plugins.list();
     const have = new Set(installed.map((p) => p.id));
-    const targets = [
-      ...manifest.own.map((p) => ({
-        id: p.id,
-        args: { source: p.source, subdirectory: p.subdirectory },
-      })),
-      ...manifest.external.map((p) => ({ id: p.id, args: { source: p.source } })),
-    ].filter((t) => !have.has(t.id));
+    const targets = manifest.plugins.filter((p) => !have.has(p.id));
     for (const target of targets) {
       try {
         await bb.sdk.plugins.install(target.args);

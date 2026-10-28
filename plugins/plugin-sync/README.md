@@ -5,19 +5,19 @@ Installs and updates the plugins listed in a GitHub repository (default `toolsti
 ## Install
 
 ```
-bb plugin install git:https://github.com/toolstik/bb-plugins.git@main --subdirectory plugins/plugin-sync
+bb marketplace add git:github.com/toolstik/bb-plugins@main
+bb plugin install plugin-sync@toolstik
 ```
 
 Then open Settings → Plugin Sync and press **Apply**, or run `bb plugin-sync apply`.
 
 ## Repository format
 
-- `.bb/plugins.json`: the repository's own plugins. Each entry `name` must equal the plugin id.
+- `marketplace.json`: a bb marketplace manifest (schema version 2) listing every plugin to install. Git and npm sources are supported; entries whose git URL is this repository count as its own plugins.
 - `sync.json` (optional):
 
 ```json
 {
-  "external": [{ "id": "some-plugin", "source": "git:https://github.com/owner/bb-plugin-some.git@semver:^1.0.0" }],
   "keyboard": [
     { "command": "thread.new", "shortcut": null },
     { "command": "plugin:new-chat-personal/new-chat", "shortcut": { "key": "O", "mod": true, "shift": true } }

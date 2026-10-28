@@ -1,0 +1,147 @@
+{
+  "$schema": "https://getbb.app/schemas/marketplace-v2.schema.json",
+  "schemaVersion": 2,
+  "name": "toolstik",
+  "displayName": "toolstik plugins",
+  "description": "Viktor Tolstik's personal bb plugins.",
+  "plugins": [
+    {
+      "id": "bulk-delete",
+      "displayName": "Bulk Delete",
+      "description": "Select several threads in the sidebar and delete or archive them together; delete every idle child of a parent thread from its menu or with `bb bulk-delete children`.",
+      "icon": "Trash2",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/bulk-delete",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "clean-copy",
+      "displayName": "Clean Copy",
+      "description": "Copy text from the bb window without theme colors, backgrounds and fonts: lists, headings, bold, italic, links, tables and code stay.",
+      "icon": "ClipboardCopy",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/clean-copy",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "nested-session-count",
+      "displayName": "Nested Session Count",
+      "description": "Shows the number of direct child sessions beside the sidebar disclosure arrow.",
+      "icon": "ListView",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/nested-session-count",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "new-chat-personal",
+      "displayName": "New Chat Without Project",
+      "description": "The sidebar New thread button and the New thread shortcut always open a chat without a project. The + next to a project still starts a chat in that project.",
+      "icon": "MessageSquarePlus",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/new-chat-personal",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "obsidian",
+      "displayName": "Obsidian",
+      "description": "Opens Obsidian notes linked in bb chats in Obsidian and tells agents in vault workspaces how to link notes.",
+      "icon": "NotebookPen",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/obsidian",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "plugin-sync",
+      "displayName": "Plugin Sync",
+      "description": "Install and update the plugins listed in your GitHub plugin repository from a Settings button, with a toast when something changes.",
+      "icon": "RefreshCw",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/plugin-sync",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "session-colors",
+      "displayName": "Session Colors",
+      "description": "Color-tag threads: a muted, theme-aware palette shown in the sidebar and the thread header, saved across restarts.",
+      "icon": {
+        "url": "./plugins/session-colors/assets/icon.svg"
+      },
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/session-colors",
+          "ref": "main"
+        }
+      }
+    },
+    {
+      "id": "statusline",
+      "displayName": "Statusline",
+      "description": "Status line above the composer: context window fill in percent and tokens, provider 5-hour and weekly limit usage, and when they reset.",
+      "icon": "Gauge",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/statusline",
+          "ref": "main"
+        }
+      }
+    }
+  ]
+}

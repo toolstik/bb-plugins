@@ -9,7 +9,7 @@ Keeps the plugin set of every bb you use in line with one GitHub repository, wit
 
 ## How it works
 
-The plugin reads `.bb/plugins.json` and an optional `sync.json` from the repository's branch on raw.githubusercontent.com. Plugins of the repository install from git with their subdirectory and track the branch; `sync.json` adds third-party plugins by install source and keyboard overrides. Plugins installed from a local path are treated as working copies and never touched. Nothing is removed.
+The plugin reads `marketplace.json`, the same file bb's plugin store reads when the repository is added as a marketplace, and an optional `sync.json` with keyboard overrides from the repository's branch on raw.githubusercontent.com. Each plugin installs from the source its marketplace entry names. Plugins installed from a local path are treated as working copies and never touched. Nothing is removed.
 
 ## Requirements
 
