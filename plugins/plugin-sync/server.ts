@@ -1,22 +1,11 @@
 // bb-plugin-plugin-sync: keeps this bb's plugin set in line with a GitHub repository.
 //
 // The repository's marketplace.json lists the plugins (the same file bb's plugin store
-// reads after `bb marketplace add`), and sync.json lists keyboard overrides the plugins
-// need. Nothing changes on its own: an hourly check records what differs, the
+// reads after `bb marketplace add`). Nothing changes on its own: an hourly check records what differs, the
 // app shows a toast once per new set of changes, and the settings section (app.tsx)
 // has the Apply button.
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-
-const shortcutSchema = z.object({
-  key: z.string().min(1),
-  mod: z.boolean().default(false),
-  shift: z.boolean().default(false),
-  alt: z.boolean().default(false),
-  control: z.boolean().default(false),
-  meta: z.boolean().default(false),
-});
-type Shortcut = z.infer<typeof shortcutSchema>;
 
 // The parts of a marketplace.json entry this plugin uses; bb validates the rest.
 const marketplaceSchema = z.object({
@@ -47,12 +36,6 @@ const marketplaceSchema = z.object({
 });
 type MarketplaceSource = z.infer<typeof marketplaceSchema>["plugins"][number]["source"];
 
-const syncFileSchema = z.object({
-  keyboard: z
-    .array(z.object({ command: z.string().min(1), shortcut: shortcutSchema.nullable() }))
-    .default([]),
-});
-
 const pluginEntrySchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
@@ -74,7 +57,6 @@ const statusSchema = z.object({
   checkedAt: z.string().nullable(),
   error: z.string().nullable(),
   plugins: z.array(pluginEntrySchema),
-  keyboard: z.array(z.object({ command: z.string(), label: z.string(), applied: z.boolean() })),
   // Installed from this repository but no longer listed in it. Shown, never removed.
   orphaned: z.array(z.string()),
   // Identifies the pending changes; the toast shows once per signature.
@@ -100,32 +82,6 @@ export const rpcContract = defineRpcContract({
 
 const STATUS_CHANGED = "status-changed";
 const SELF_ID = "plugin-sync";
-
-function formatShortcut(shortcut: Shortcut | null): string {
-  if (shortcut === null) return "off";
-  const parts = [
-    shortcut.mod && "Mod",
-    shortcut.control && "Ctrl",
-    shortcut.meta && "Meta",
-    shortcut.alt && "Alt",
-    shortcut.shift && "Shift",
-    shortcut.key,
-  ];
-  return parts.filter(Boolean).join("+");
-}
-
-function sameShortcut(a: Shortcut | null | undefined, b: Shortcut | null): boolean {
-  if (a === undefined) return false;
-  if (a === null || b === null) return a === b;
-  return (
-    a.key.toLowerCase() === b.key.toLowerCase() &&
-    a.mod === b.mod &&
-    a.shift === b.shift &&
-    a.alt === b.alt &&
-    a.control === b.control &&
-    a.meta === b.meta
-  );
-}
 
 /** A source without its ref or version: git:https://host/repo.git@main → https://host/repo.git */
 function sourceBase(source: string): string {
@@ -164,7 +120,7 @@ export default async function plugin(bb: BbPluginApi) {
     repository: {
       type: "string",
       label: "GitHub repository",
-      description: "owner/name of the public repository with marketplace.json and sync.json",
+      description: "owner/name of the public repository with marketplace.json",
       default: "toolstik/bb-plugins",
       experimental_schema: z.string().regex(/^[\w.-]+\/[\w.-]+$/, "Use owner/name"),
     },
@@ -189,10 +145,7 @@ export default async function plugin(bb: BbPluginApi) {
 
   async function readManifest() {
     const { repository, branch } = await settings.get();
-    const [marketplace, syncFile] = await Promise.all([
-      fetchJson(repository, branch, "marketplace.json"),
-      fetchJson(repository, branch, "sync.json"),
-    ]);
+    const marketplace = await fetchJson(repository, branch, "marketplace.json");
     if (marketplace === null) throw new Error(`${repository}@${branch} has no marketplace.json`);
     const repoUrl = `https://github.com/${repository}.git`;
     const plugins = marketplaceSchema.parse(marketplace).plugins.flatMap((entry) => {
@@ -208,19 +161,16 @@ export default async function plugin(bb: BbPluginApi) {
         },
       ];
     });
-    const { keyboard } = syncFileSchema.parse(syncFile ?? {});
-    return { repository, branch, repoUrl, plugins, keyboard };
+    return { repository, branch, repoUrl, plugins };
   }
 
   async function publish(
     partial: Omit<SyncStatus, "signature" | "acknowledged" | "busy">,
   ): Promise<SyncStatus> {
-    const pending = [
-      ...partial.plugins
-        .filter((p) => p.state === "missing" || p.state === "update")
-        .map((p) => `${p.state}:${p.id}:${p.detail ?? ""}`),
-      ...partial.keyboard.filter((k) => !k.applied).map((k) => `keyboard:${k.label}`),
-    ].sort();
+    const pending = partial.plugins
+      .filter((p) => p.state === "missing" || p.state === "update")
+      .map((p) => `${p.state}:${p.id}:${p.detail ?? ""}`)
+      .sort();
     const signature = pending.join("\n");
     const acknowledged = await bb.storage.kv.get<string>("acknowledged");
     const status: SyncStatus = {
@@ -243,7 +193,6 @@ export default async function plugin(bb: BbPluginApi) {
       branch,
       checkedAt: new Date().toISOString(),
       plugins: [],
-      keyboard: [],
       orphaned: [],
     };
     let manifest: Awaited<ReturnType<typeof readManifest>>;
@@ -253,12 +202,8 @@ export default async function plugin(bb: BbPluginApi) {
       return publish({ ...base, error: error ?? errorText(cause) });
     }
 
-    const [{ plugins: installed }, config] = await Promise.all([
-      bb.sdk.plugins.list(),
-      bb.sdk.system.config(),
-    ]);
+    const { plugins: installed } = await bb.sdk.plugins.list();
     const byId = new Map(installed.map((p) => [p.id, p]));
-    const repoUrl = `https://github.com/${repository}.git`;
 
     const describe = (
       id: string,
@@ -288,27 +233,16 @@ export default async function plugin(bb: BbPluginApi) {
       return result("current");
     };
 
-    const plugins = [
-      ...manifest.plugins.map((p) => describe(p.id, p.kind, p.display, sourceBase(p.args.source))),
-    ];
-
-    const keyboard = manifest.keyboard.map((entry) => {
-      const current = config.keybindingOverrides.find(
-        (o) => o.command === entry.command && o.platform === undefined,
-      );
-      return {
-        command: entry.command,
-        label: `${entry.command} → ${formatShortcut(entry.shortcut)}`,
-        applied: sameShortcut(current?.shortcut, entry.shortcut),
-      };
-    });
+    const plugins = manifest.plugins.map((p) =>
+      describe(p.id, p.kind, p.display, sourceBase(p.args.source)),
+    );
 
     const listed = new Set(plugins.map((p) => p.id));
     const orphaned = installed
-      .filter((p) => sourceBase(p.source) === repoUrl && !listed.has(p.id))
+      .filter((p) => sourceBase(p.source) === manifest.repoUrl && !listed.has(p.id))
       .map((p) => p.id);
 
-    return publish({ ...base, error, plugins, keyboard, orphaned });
+    return publish({ ...base, error, plugins, orphaned });
   }
 
   /** Asks bb to re-check every tracking source, then rebuilds the status. */
@@ -352,33 +286,6 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
-  async function applyShortcuts(
-    manifest: Awaited<ReturnType<typeof readManifest>>,
-    result: ActionResult,
-  ): Promise<void> {
-    try {
-      const { keybindingOverrides } = await bb.sdk.system.config();
-      const general = (o: { platform?: string }) => o.platform === undefined;
-      const changed = manifest.keyboard.filter((k) => {
-        const current = keybindingOverrides.find((o) => o.command === k.command && general(o));
-        return !sameShortcut(current?.shortcut, k.shortcut);
-      });
-      if (changed.length === 0) return;
-      const wanted = new Set(manifest.keyboard.map((k) => k.command));
-      const kept = keybindingOverrides.filter((o) => !(general(o) && wanted.has(o.command)));
-      const next = [
-        ...kept,
-        ...manifest.keyboard.map((k) => ({ command: k.command, shortcut: k.shortcut })),
-      ] as Parameters<typeof bb.sdk.system.updateKeyboardSettings>[0];
-      await bb.sdk.system.updateKeyboardSettings(next);
-      for (const k of changed) {
-        result.done.push(`shortcut ${k.command} → ${formatShortcut(k.shortcut)}`);
-      }
-    } catch (cause) {
-      result.failed.push({ id: "keyboard", error: errorText(cause) });
-    }
-  }
-
   async function applyUpdates(ids: string[], result: ActionResult): Promise<void> {
     for (const pluginId of ids.filter((p) => p !== SELF_ID)) {
       try {
@@ -400,13 +307,12 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
-  /** Brings this bb in line with the repository: installs, shortcuts, updates. Never removes. */
+  /** Brings this bb in line with the repository: installs and updates. Never removes. */
   function apply(): Promise<ActionResult> {
     return exclusive(async () => {
       const result: ActionResult = { done: [], failed: [] };
       const manifest = await readManifest();
       await installMissing(manifest, result);
-      await applyShortcuts(manifest, result);
       const status = await check();
       const ids = status.plugins.filter((p) => p.state === "update").map((p) => p.id);
       await applyUpdates(ids, result);
@@ -450,7 +356,7 @@ export default async function plugin(bb: BbPluginApi) {
   const usage = [
     "Usage:",
     "  bb plugin-sync status [--json]         Re-check sources and show what differs",
-    "  bb plugin-sync apply [--json]          Install missing plugins, apply shortcuts and updates",
+    "  bb plugin-sync apply [--json]          Install missing plugins and apply updates",
     "  bb plugin-sync update <id> [--json]    Update one plugin",
   ].join("\n");
 
@@ -459,9 +365,6 @@ export default async function plugin(bb: BbPluginApi) {
     if (status.error !== null) lines.push(`error: ${status.error}`);
     for (const p of status.plugins) {
       lines.push(`${p.state.padEnd(13)}${p.id}${p.detail === null ? "" : `  (${p.detail})`}`);
-    }
-    for (const k of status.keyboard) {
-      lines.push(`${(k.applied ? "current" : "missing").padEnd(13)}${k.label}`);
     }
     for (const id of status.orphaned) lines.push(`${"not listed".padEnd(13)}${id}`);
     return lines.join("\n");
@@ -483,7 +386,7 @@ export default async function plugin(bb: BbPluginApi) {
       },
       {
         name: "apply",
-        summary: "Install missing plugins, apply shortcuts and updates",
+        summary: "Install missing plugins and apply updates",
         usage: "bb plugin-sync apply [--json]",
       },
       {

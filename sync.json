@@ -1,6 +1,0 @@
-{
-  "keyboard": [
-    { "command": "thread.new", "shortcut": null },
-    { "command": "plugin:new-chat-personal/new-chat", "shortcut": { "key": "O", "mod": true, "shift": true } }
-  ]
-}

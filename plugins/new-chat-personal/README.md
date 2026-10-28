@@ -12,12 +12,10 @@ What stays: the + next to a project starts a chat in that project, and the compo
 ## Install
 
 ```
-bb plugin install git:https://github.com/toolstik/bb-plugins.git@main --subdirectory plugins/new-chat-personal
-bb settings keyboard set thread.new disabled
-bb settings keyboard set plugin:new-chat-personal/new-chat Mod+Shift+O
+bb plugin install new-chat-personal@toolstik
 ```
 
-The two keyboard commands move Cmd+Shift+O from bb's own New thread (which picks the current thread's project) to this plugin.
+On its first load the plugin moves Cmd+Shift+O from bb's own New thread (which picks the current thread's project) to its "New chat without project" command. It does this once per install, so a shortcut you change later in Settings → Keyboard stays as you set it.
 
 ## Remove
 

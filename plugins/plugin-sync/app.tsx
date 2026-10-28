@@ -33,16 +33,14 @@ function useSyncStatus() {
 function counts(status: SyncStatus) {
   const missing = status.plugins.filter((p) => p.state === "missing").length;
   const updates = status.plugins.filter((p) => p.state === "update").length;
-  const keyboard = status.keyboard.filter((k) => !k.applied).length;
-  return { missing, updates, keyboard, total: missing + updates + keyboard };
+  return { missing, updates, total: missing + updates };
 }
 
 function summary(status: SyncStatus): string {
-  const { missing, updates, keyboard } = counts(status);
+  const { missing, updates } = counts(status);
   const parts = [
     missing > 0 && `${missing} new plugin${missing === 1 ? "" : "s"}`,
     updates > 0 && `${updates} update${updates === 1 ? "" : "s"}`,
-    keyboard > 0 && `${keyboard} shortcut${keyboard === 1 ? "" : "s"}`,
   ];
   return parts.filter(Boolean).join(", ");
 }
@@ -172,22 +170,6 @@ function SettingsSection() {
         </ul>
       )}
 
-      {status.keyboard.length === 0 ? null : (
-        <div>
-          <h4 className="mb-1 text-xs font-medium text-muted-foreground">Shortcuts</h4>
-          <ul className="divide-y divide-border rounded-lg border border-border bg-card px-4">
-            {status.keyboard.map((k) => (
-              <li key={k.command} className="flex items-center gap-3 py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate font-mono text-xs">{k.label}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {k.applied ? "Applied" : "Not applied"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {status.orphaned.length === 0 ? null : (
         <p className="text-xs text-muted-foreground">
           Installed from this repository but no longer listed: {status.orphaned.join(", ")}. Remove
@@ -241,7 +223,7 @@ export default definePluginApp((app) => {
     id: "sync",
     title: "Plugin repository",
     description:
-      "Apply installs missing plugins, sets the listed shortcuts, and updates outdated plugins. Nothing changes until you press it.",
+      "Apply installs missing plugins and updates outdated ones. Nothing changes until you press it.",
     component: SettingsSection,
   });
   app.slots.experimental_appOverlay({
