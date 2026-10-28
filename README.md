@@ -9,35 +9,36 @@
 | `nested-session-count` | Число дочерних сессий рядом со стрелкой раскрытия в сайдбаре |
 | `new-chat-personal` | Кнопка и шорткат New thread всегда открывают чат без проекта |
 | `obsidian` | Открывает ссылки на заметки Obsidian из чатов в Obsidian |
+| `plugin-sync` | Ставит и обновляет плагины из этого репозитория по кнопке в настройках |
 | `session-colors` | Цветные метки тредов в сайдбаре и заголовке |
 | `statusline` | Строка над композером: заполнение контекста и лимиты провайдера |
 
-Сторонние плагины, которые тоже должны быть на каждой машине, перечислены в `external-plugins.txt`.
-
 ## Новый компьютер
 
-Репозиторий публичный, для чтения авторизация в GitHub не нужна:
-
 ```sh
-git clone https://github.com/toolstik/bb-plugins.git ~/src/bb-plugins
-~/src/bb-plugins/scripts/setup.sh
+bb plugin install git:https://github.com/toolstik/bb-plugins.git@main --subdirectory plugins/plugin-sync
 ```
 
-Авторизация (`gh auth login` и `gh auth setup-git`) нужна только на машине, с которой пушишь изменения.
+Затем Settings → Plugin Sync → **Sync**. Он ставит все плагины из `.bb/plugins.json` и сторонние из `sync.json` и выставляет шорткаты из `sync.json`.
 
-`setup.sh` ставит все плагины из git, выставляет шорткаты для `new-chat-personal` и создаёт в bb автоматизацию "Sync bb plugins" (проект Personal, каждый час в :17). Автоматизация берёт свежий `main` и запускает `scripts/sync.sh`: он ставит новые плагины, обновляет изменившиеся и ничего не печатает, если менять нечего.
+Дальше `plugin-sync` раз в час проверяет репозиторий. Если появились новые плагины, обновления или расходятся шорткаты, в bb один раз всплывает уведомление с кнопками **Apply** и **Later**. Сам он ничего не ставит и не обновляет. Те же действия есть в настройках плагина и в CLI: `bb plugin-sync status|sync|update`.
 
-Синхронизировать вручную: `bb automation run <id>` или `~/src/bb-plugins/scripts/sync.sh` из актуального клона.
+## Что где лежит
+
+- `plugins/<id>/`: исходники плагинов. Имя каталога и `name` в `.bb/plugins.json` совпадают с id плагина.
+- `.bb/plugins.json`: список своих плагинов, они ставятся из git с отслеживанием `main`.
+- `sync.json`: сторонние плагины (`external`, id и источник для `bb plugin install`) и переопределения шорткатов (`keyboard`).
 
 ## Разработка
 
-На машине, где плагин правится, он установлен с локального пути, и `sync.sh` его не трогает:
+На машине, где плагин правится, он установлен с локального пути, и `plugin-sync` его не трогает:
 
 ```sh
+git clone https://github.com/toolstik/bb-plugins.git ~/src/bb-plugins
 bb plugin install path:$HOME/src/bb-plugins/plugins/<id>
 bb plugin dev ~/src/bb-plugins/plugins/<id>   # пересборка и перезагрузка при сохранении
 ```
 
-Остальные машины получают изменения после `git push` в `main` при следующем прогоне автоматизации.
+Остальные машины увидят изменения после `git push` в `main`. Для пуша нужна авторизация: `gh auth login` и `gh auth setup-git`.
 
-Новый плагин: положить его в `plugins/<id>/` (имя каталога совпадает с id плагина), добавить строку в `.bb/plugins.json`, запушить. Удалённый из репозитория плагин с других машин автоматически не удаляется: `bb plugin remove <id>` на каждой.
+Новый плагин: положить его в `plugins/<id>/`, добавить строку в `.bb/plugins.json`, запушить. Удалённый из репозитория плагин с других машин не удаляется. `plugin-sync` покажет его как "no longer listed", а удалить можно через `bb plugin remove <id>`.

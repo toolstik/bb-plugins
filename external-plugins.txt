@@ -1,3 +1,0 @@
-# Сторонние плагины, которые sync.sh ставит на каждую машину.
-# Формат: <id плагина> <источник для bb plugin install>
-handoff git:https://github.com/vburojevic/bb-plugin-handoff.git@semver:^0.7.0
