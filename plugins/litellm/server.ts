@@ -1,3 +1,4 @@
+import { credentialHostContract, credentialRpcContract } from "./credential-contract.js";
 import type { BbPluginApi, PluginProviderDeclaration } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { normalizedBaseUrl } from "./src/config.js";
@@ -22,6 +23,15 @@ export default async function plugin(bb: BbPluginApi) {
     claudeModels: { type: "string", label: "Claude Code model allowlist (JSON)", default: "[]", experimental_multiline: true, experimental_schema: jsonList },
     codexModels: { type: "string", label: "Codex model allowlist (JSON)", default: "[]", experimental_multiline: true, experimental_schema: jsonList },
   });
+  const host = bb.hosts.experimental_client({ contract: credentialHostContract });
+  bb.rpc.register(credentialRpcContract, {
+    credentialTargets: async () => ({ hosts: (await bb.sdk.hosts.list()).map(item => ({ id: item.id, name: item.name, connected: item.status === "connected" })) }),
+    credentialStatus: async ({ hostId }, context) => host.call("credentialStatus", { path: (await settings.get()).keyFile }, { hostId, signal: context.experimental_signal }),
+    saveCredential: async ({ hostId, apiKey }, context) => {
+      const result = await host.call("saveCredential", { path: (await settings.get()).keyFile, apiKey }, { hostId, signal: context.experimental_signal });
+      return result;
+    },
+  }, { experimental_discoverable: false });
   let registrations: { dispose(): void }[] = [];
   function register(values: Awaited<ReturnType<typeof settings.get>>) {
     for (const item of registrations) item.dispose();

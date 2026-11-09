@@ -9,10 +9,13 @@
     "esModuleInterop": true,
     "types": [
       "node"
-    ]
+    ],
+    "jsx": "react-jsx"
   },
   "include": [
     "*.ts",
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "app.tsx",
+    "components/**/*.tsx"
   ]
 }
