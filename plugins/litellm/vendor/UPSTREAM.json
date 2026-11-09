@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/get-bb/bb",
+  "commit": "55135d1e5045d6c5d3c24f5a4d5556ed3e11cb00",
+  "paths": [
+    "plugins/provider-codex/src",
+    "plugins/provider-claude-code/src"
+  ],
+  "license": "MIT"
+}

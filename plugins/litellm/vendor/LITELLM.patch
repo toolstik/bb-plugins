@@ -1,0 +1,141 @@
+--- a/vendor/claude-code/bridge/bridge.ts
++++ b/vendor/claude-code/bridge/bridge.ts
+@@ -2933,3 +2933,7 @@
+     shutdownGracefully("Bridge closed while awaiting permission approval");
+   },
+ });
++
++export function experimental_applySkillsForLiteLLM(params: { roots: { id: string; path: string }[] }): void { configuredSkillRoots = params.roots; }
++
++export async function experimental_closeForLiteLLM(): Promise<void> { await closeThreadSessionsGracefully("Corporate bridge disposed"); }
+--- a/vendor/claude-code/bridge/sdk-session.ts
++++ b/vendor/claude-code/bridge/sdk-session.ts
+@@ -1,3 +1,4 @@
++import { corporateClaudeEnv } from "../../../src/runtime.js";
+ import { experimental_spawnHostProcess as spawn } from "@get-bb/plugin-sdk/process";
+ import {
+   query,
+@@ -296,7 +297,7 @@
+         : {}),
+       ...(this.options.plugins ? { plugins: this.options.plugins } : {}),
+       ...(this.options.thinking ? { thinking: this.options.thinking } : {}),
+-      ...(this.options.settings ? { settings: this.options.settings } : {}),
++      settings: { ...(typeof this.options.settings === "object" ? this.options.settings : {}), env: corporateClaudeEnv(this.options.model) },
+       extraArgs: {
+         ...this.options.extraArgs,
+         "replay-user-messages": null,
+--- a/vendor/claude-code/bridge/session-options.ts
++++ b/vendor/claude-code/bridge/session-options.ts
+@@ -1,3 +1,4 @@
++import { corporateClaudeEnv, corporateClaudeExecutable } from "../../../src/runtime.js";
+ import { experimental_hostToolchain as hostToolchain } from "@get-bb/plugin-sdk/process";
+ import {
+   type InstructionMode,
+@@ -239,7 +240,8 @@
+   const additionalDirectories = isWorkspaceWriteSession(params)
+     ? (params.additionalWorkspaceWriteRoots ?? [])
+     : [];
+-  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable({ env });
++  const pathToClaudeCodeExecutable = corporateClaudeExecutable() ?? resolveClaudeCodeExecutable({ env });
++  if (!pathToClaudeCodeExecutable) throw new Error("Install Claude Code on this execution host or configure claudeExecutable.");
+   const flagSettings = buildFlagSettings(params);
+   const effort =
+     params.reasoningLevel === undefined
+@@ -254,6 +256,7 @@
+     env: {
+       ...env,
+       ...buildClaudeFeatureEnv(params),
++      ...corporateClaudeEnv(params.model),
+     },
+     permissionMode: params.permissionMode,
+     allowBypassPermissions: params.permissionScope === "full",
+--- a/vendor/codex/bridge/bridge.ts
++++ b/vendor/codex/bridge/bridge.ts
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env node
++import { corporateCodexLaunch, corporateCodexEnv } from "../../../src/runtime.js";
+ 
+ import { experimental_selectedSkillMentions as selectedSkillMentions } from "@get-bb/plugin-sdk/provider-bridge";
+ import { createHash } from "node:crypto";
+@@ -363,38 +363,7 @@
+   command: string;
+   args: string[];
+ } {
+-  const command = env[CODEX_APP_SERVER_COMMAND_ENV];
+-  const rawArgs = env[CODEX_APP_SERVER_ARGS_ENV];
+-  const args = command
+-    ? rawArgs
+-      ? z.array(z.string()).parse(JSON.parse(rawArgs))
+-      : []
+-    : ["app-server"];
+-  const poolBaseUrl = env[CODEX_POOL_BASE_URL_ENV];
+-  const poolToken = env[CODEX_POOL_AUTH_TOKEN_ENV];
+-  if (!poolBaseUrl || !poolToken) return { command: command ?? "codex", args };
+-  return {
+-    command: command ?? "codex",
+-    args: [
+-      ...args,
+-      "-c",
+-      `openai_base_url=${JSON.stringify(poolBaseUrl)}`,
+-      "-c",
+-      'model_provider="bb-account-pool"',
+-      "-c",
+-      'model_providers.bb-account-pool.name="OpenAI"',
+-      "-c",
+-      `model_providers.bb-account-pool.base_url=${JSON.stringify(poolBaseUrl)}`,
+-      "-c",
+-      'model_providers.bb-account-pool.wire_api="responses"',
+-      "-c",
+-      "model_providers.bb-account-pool.requires_openai_auth=true",
+-      "-c",
+-      "model_providers.bb-account-pool.supports_websockets=false",
+-      "-c",
+-      'model_providers.bb-account-pool.env_http_headers.x-bb-account-pool-token="CODEX_POOL_AUTH_TOKEN"',
+-    ],
+-  };
++  return corporateCodexLaunch(env);
+ }
+ 
+ function appServerLaunchEnv(
+@@ -413,7 +382,7 @@
+ ): NodeJS.ProcessEnv {
+   return withoutBridgeRuntimeEnv(
+     sanitizeInheritedChildProcessEnv({
+-      env: appServerLaunchEnv(envVars),
++      env: { ...appServerLaunchEnv(envVars), ...corporateCodexEnv() },
+     }),
+   );
+ }
+@@ -2782,3 +2751,7 @@
+     process.exit(0);
+   },
+ });
++
++export function experimental_applySkillsForLiteLLM(params: { roots: { path: string }[] }): void { configuredSkillExtraRoots = params.roots.map(root => root.path); }
++
++export const experimental_closeForLiteLLM = killAllChildren;
+--- a/vendor/codex/extension-kinds.ts
++++ b/vendor/codex/extension-kinds.ts
+@@ -1,6 +1,6 @@
+ import { z } from "zod";
+ 
+-export const CODEX_PLUGIN_ID = "provider-codex";
++export const CODEX_PLUGIN_ID = "litellm";
+ 
+ export const CODEX_GOAL_EXTENSION_KIND = `${CODEX_PLUGIN_ID}/goal` as const;
+ export const CODEX_MACOS_PERMISSION_EXTENSION_KIND =
+--- a/vendor/codex/session-params.ts
++++ b/vendor/codex/session-params.ts
+@@ -1,3 +1,4 @@
++import { corporateCodexConfig } from "../../src/runtime.js";
+ import { experimental_selectedSkillMentions as selectedSkillMentions } from "@get-bb/plugin-sdk/provider-bridge";
+ import {
+   jsonValueSchema,
+@@ -662,6 +663,7 @@
+       config["sandbox_workspace_write.writable_roots"] = [...writableRoots];
+     }
+   }
++  Object.assign(config, corporateCodexConfig());
+   return Object.keys(config).length > 0 ? config : undefined;
+ }
+ 

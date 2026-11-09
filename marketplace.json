@@ -40,6 +40,23 @@
       }
     },
     {
+      "id": "litellm",
+      "displayName": "LiteLLM Agents",
+      "description": "Use your corporate LiteLLM models with Claude Code and Codex alongside personal connections.",
+      "icon": "Network",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/litellm",
+          "ref": "main"
+        }
+      }
+    },
+    {
       "id": "nested-session-count",
       "displayName": "Nested Session Count",
       "description": "Shows the number of direct child sessions beside the sidebar disclosure arrow.",
