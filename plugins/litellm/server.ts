@@ -59,7 +59,7 @@ export default async function plugin(bb: BbPluginApi) {
       const isClaude = engine === "claude-code";
       const declaration: PluginProviderDeclaration = {
         id: `litellm-${engine}`, displayName: `LiteLLM / ${isClaude ? "Claude Code" : "Codex"}`,
-        family: "litellm", icon: "Network", experimental_visibility: "always",
+        family: "litellm", icon: isClaude ? "./icons/claude-litellm.svg" : "./icons/codex-litellm.svg", experimental_visibility: "always",
         experimental_bridgeOptions: { engine, baseUrl: normalizedBaseUrl(values.baseUrl), keyFile: values.keyFile,
           executable: isClaude ? values.claudeExecutable : values.codexExecutable,
           defaultModel: isClaude ? values.claudeDefaultModel : values.codexDefaultModel,
