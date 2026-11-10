@@ -15,6 +15,6 @@ The credential file lives on the execution host, outside repositories, contains 
 
 Missing credentials, 401 and connectivity failures must not fall back to a personal account. Do not modify global Claude/Codex configs or sign users out to diagnose this plugin. Check URL, keyFile, installed executables, catalog and selected model first. Use `/v1/models`, never `/health`.
 
-Catalog membership does not guarantee tool calling or agent compatibility. Reasoning overrides, premium service tiers and subscription usage are not provided. For initial diagnosis use an Anthropic model with Claude Code and an OpenAI model with Codex.
+Catalog membership does not guarantee tool calling or agent compatibility. Reasoning overrides and premium service tiers are not provided. Corporate key/user dollar budgets are exposed through provider-usage.v1 using /key/info and /user/info on the execution host; StatusLine displays the API-provided limit and spending, not a guessed default. Subscription windows do not apply. For initial diagnosis use an Anthropic model with Claude Code and an OpenAI model with Codex.
 
 The source README documents building, conformance tests and an explicit live smoke script. Live smoke tests consume the corporate model budget. Do not run them merely to inspect status.

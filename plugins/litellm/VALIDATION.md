@@ -50,3 +50,11 @@
 - Проверка типов и сборка server/app/host прошли.
 - На работающем BB проверены RPC списка машин и статуса существующего приватного файла. Действующий ключ не перезаписывался ради проверки.
 - Визуальная проверка окна BB не выполнена: управление приложением завершилось по таймауту. Форма проверена через официальный UI-harness SDK.
+
+## 0.1.2: budget usage
+
+Added /key/info and /user/info collection on the execution host and provider-usage.v1 resources for both engines. Verified the live gateway returns a user budget of $30 (30d), with reset at 2026-12-01T00:00:00Z; the key has no separate max_budget. Only whitelisted numeric budget fields were inspected; no credentials or raw key/user responses were printed. Requests use an explicit bb-litellm User-Agent; Python's default User-Agent received HTTP 403 while the plugin User-Agent succeeded.
+
+18 tests pass, including new budget tests covering user-budget fallback, secret stripping, cache sharing and rotation, overage, forbidden API access, missing budgets, resource discovery and host routing. Both plugins pass type checking and production builds.
+
+Live StatusLine usage_limits RPC returned status ok for both litellm-codex and litellm-claude-code with the same cached observation and USD cost fields. A React server-render check verified the visible $30 label, rounded 1% and $0.19 spending, while preserving the 5h subscription label.

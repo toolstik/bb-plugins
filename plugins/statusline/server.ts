@@ -19,6 +19,7 @@ const windowSchema = z
     kind: z.string().optional(),
     label: z.string(),
     usedPercent: z.number(),
+    cost: z.object({ usedUsdCents: z.number().nonnegative(), limitUsdCents: z.number().positive() }).nullable().optional(),
     resetsAt: z.string().nullable(),
     model: z.string().nullable().optional(),
   })

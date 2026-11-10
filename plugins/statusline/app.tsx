@@ -209,6 +209,9 @@ function formatReset(iso: string, kind: string | undefined, now: number): string
 }
 
 function windowLabel(window: UsageWindow): string {
+  if (window.kind === "custom" && window.cost) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(window.cost.limitUsdCents / 100);
+  }
   switch (window.kind) {
     case "five-hour":
       return "5h";
@@ -321,6 +324,7 @@ function WindowSegment({ window, now, stale }: { window: UsageWindow; now: numbe
   const resetAt = window.resetsAt === null ? null : resetDate(window.resetsAt);
   const title = [
     `${window.label}: ${Math.round(percent)}% used`,
+    window.cost ? `$${(window.cost.usedUsdCents / 100).toFixed(4)} of $${(window.cost.limitUsdCents / 100).toFixed(2)}` : null,
     resetAt === null
       ? null
       : `resets ${resetAt.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`,
@@ -334,7 +338,7 @@ function WindowSegment({ window, now, stale }: { window: UsageWindow; now: numbe
       label={windowLabel(window)}
       percent={percent}
       thresholds={LIMIT_THRESHOLDS}
-      details={reset === null ? null : <span>↻ {reset}</span>}
+      details={<>{window.cost ? <span>${(window.cost.usedUsdCents / 100).toFixed(2)}</span> : null}{reset === null ? null : <span>↻ {reset}</span>}</>}
     />
   );
 }

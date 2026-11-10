@@ -18,3 +18,5 @@ npm install
 bb plugin install .   # registers this directory in place
 bb plugin dev         # rebuild and reload on every save
 ```
+
+LiteLLM Agents 0.1.2 exposes key/user dollar budgets through the same usage contract. For a custom monetary window the label is the API-provided dollar limit (for example `$30`), followed by the used percent and spent dollars; the tooltip includes precise amounts. These are shared account expenses, including other LiteLLM clients. Existing five-hour and weekly labels remain unchanged.

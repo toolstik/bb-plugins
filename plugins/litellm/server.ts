@@ -1,3 +1,4 @@
+import { usageHostContract, usageSourceRpcContract } from "./usage-contract.js";
 import { credentialHostContract, credentialRpcContract } from "./credential-contract.js";
 import type { BbPluginApi, PluginProviderDeclaration } from "@get-bb/plugin-sdk";
 import { z } from "zod";
@@ -32,6 +33,24 @@ export default async function plugin(bb: BbPluginApi) {
       return result;
     },
   }, { experimental_discoverable: false });
+  const budgetHost = bb.hosts.experimental_client({ contract: usageHostContract });
+  async function usageResources() {
+    return (await bb.sdk.hosts.list()).filter(host => host.status === "connected").flatMap(host =>
+      ["litellm-claude-code", "litellm-codex"].map(providerId => ({
+        id: `${host.id}:${providerId}`, providerId, accountKey: null, label: "LiteLLM",
+        scope: { kind: "host" as const, hostId: host.id, hostName: host.name },
+      })));
+  }
+  bb.rpc.register(usageSourceRpcContract, {
+    "provider-usage.v1.listResources": async () => ({ resources: await usageResources() }),
+    "provider-usage.v1.getResource": async ({ resourceId, refresh }, context) => {
+      const resource = (await usageResources()).find(item => item.id === resourceId);
+      if (!resource) throw new Error("LiteLLM usage resource is no longer available. Relist resources.");
+      const values = await settings.get();
+      return budgetHost.call("budgetUsage", { baseUrl: values.baseUrl, keyFile: values.keyFile, refresh },
+        { hostId: resource.scope.hostId, signal: context.experimental_signal });
+    },
+  }, { experimental_discoverable: true });
   let registrations: { dispose(): void }[] = [];
   function register(values: Awaited<ReturnType<typeof settings.get>>) {
     for (const item of registrations) item.dispose();
