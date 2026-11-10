@@ -338,7 +338,7 @@ function WindowSegment({ window, now, stale }: { window: UsageWindow; now: numbe
       label={windowLabel(window)}
       percent={percent}
       thresholds={LIMIT_THRESHOLDS}
-      details={<>{window.cost ? <span>${(window.cost.usedUsdCents / 100).toFixed(2)}</span> : null}{reset === null ? null : <span>↻ {reset}</span>}</>}
+      details={reset === null ? null : <span>↻ {reset}</span>}
     />
   );
 }
