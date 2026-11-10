@@ -9,14 +9,17 @@ const budgetSchema = z.object({
   max_budget: z.number().finite().nonnegative().nullable(),
   budget_reset_at: z.string().nullable().optional(),
 });
+const userBudgetSchema = budgetSchema.omit({ max_budget: true }).extend({
+  metadata: z.object({ paid_model_budget: z.number().finite().positive() }),
+}).transform(({ metadata, ...user }) => ({ ...user, max_budget: metadata.paid_model_budget }));
 const cache = new Map<string, { at: number; value: Promise<UsageMeasurement> }>();
 
 export function budgetWindow(value: unknown, scope: "key" | "user") {
-  const result = budgetSchema.safeParse(value);
+  const result = (scope === "user" ? userBudgetSchema : budgetSchema).safeParse(value);
   if (!result.success || !result.data.max_budget) return null;
   const { spend, max_budget, budget_reset_at } = result.data;
   return { id: `litellm-${scope}-budget`, kind: "custom" as const,
-    label: scope === "user" ? "User budget" : "Key budget", model: null,
+    label: scope === "user" ? "Paid model budget" : "Key budget", model: null,
     usedPercent: spend / max_budget * 100,
     resetsAt: budget_reset_at && Number.isFinite(Date.parse(budget_reset_at)) ? new Date(budget_reset_at).toISOString() : null,
     cost: { usedUsdCents: spend * 100, limitUsdCents: max_budget * 100 } };
@@ -25,7 +28,7 @@ export function budgetWindow(value: unknown, scope: "key" | "user") {
 async function request(baseUrl: string, route: string, key: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
   let response: Response;
   try {
-    response = await fetch(baseUrl + route, { headers: { Authorization: `Bearer ${key}`, "User-Agent": "bb-litellm/0.1.2" },
+    response = await fetch(baseUrl + route, { headers: { Authorization: `Bearer ${key}`, "User-Agent": "bb-litellm/0.1.4" },
       redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000) });
   } catch { throw new Error("Cannot reach LiteLLM budget API."); }
   if (!response.ok) { await response.body?.cancel(); throw new Error(`LiteLLM ${route} returned HTTP ${response.status}.`); }
@@ -61,7 +64,7 @@ export async function budgetUsage(input: { baseUrl: string; keyFile: string; ref
     });
     if (!windows.length) return failure(results.some(r => r.status === "rejected")
       ? "LiteLLM budget API is unavailable or access is denied. Ask support for read access to your own /key/info and /user/info."
-      : "LiteLLM reports no finite key or user budget. No default dollar limit is assumed.");
+      : "LiteLLM reports no valid user_info.metadata.paid_model_budget or finite key budget. No default dollar limit is assumed.");
     return { accountKey: null, observedAt: Date.now(), usage: { status: "ok", accountEmail: null, plan: null,
       planLabel: "LiteLLM", windows } };
   })().catch(() => failure("Cannot collect LiteLLM budget usage."));

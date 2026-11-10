@@ -58,3 +58,7 @@ Added /key/info and /user/info collection on the execution host and provider-usa
 18 tests pass, including new budget tests covering user-budget fallback, secret stripping, cache sharing and rotation, overage, forbidden API access, missing budgets, resource discovery and host routing. Both plugins pass type checking and production builds.
 
 Live StatusLine usage_limits RPC returned status ok for both litellm-codex and litellm-claude-code with the same cached observation and USD cost fields. A React server-render check verified the visible $30 label, rounded 1% and $0.19 spending, while preserving the 5h subscription label.
+
+## 0.1.4: paid model budget
+
+User budget denominator now comes exclusively from user_info.metadata.paid_model_budget, not user_info.max_budget. Live API reports paid_model_budget=20 and max_budget=30; the StatusLine must use $20. Spending remains user_info.spend. Regression coverage rejects missing, null, zero, negative and string metadata limits without falling back to max_budget.

@@ -18,3 +18,5 @@ Missing credentials, 401 and connectivity failures must not fall back to a perso
 Catalog membership does not guarantee tool calling or agent compatibility. Reasoning overrides and premium service tiers are not provided. Corporate key/user dollar budgets are exposed through provider-usage.v1 using /key/info and /user/info on the execution host; StatusLine displays the API-provided limit and spending, not a guessed default. Subscription windows do not apply. For initial diagnosis use an Anthropic model with Claude Code and an OpenAI model with Codex.
 
 The source README documents building, conformance tests and an explicit live smoke script. Live smoke tests consume the corporate model budget. Do not run them merely to inspect status.
+
+The user budget limit must come exclusively from user_info.metadata.paid_model_budget, with spending from user_info.spend. Do not substitute user_info.max_budget. Missing/invalid paid_model_budget means no user budget window. Key budgets still use info.max_budget.

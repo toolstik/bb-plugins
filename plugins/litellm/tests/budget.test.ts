@@ -22,15 +22,15 @@ it("uses the actual user budget when the key is uncapped; caches both engines an
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${key}`);
     expect((init.headers as Record<string, string>)["User-Agent"]).toContain("bb-litellm/");
     return Response.json(url.endsWith("/key/info") ? { key, info: { spend: 0.185, max_budget: null } }
-      : { user_info: { spend: 0.185, max_budget: 30, budget_reset_at: "2026-12-01T00:00:00Z" }, keys: [{ token: key }] });
+      : { user_info: { spend: 0.185, max_budget: 30, metadata: { paid_model_budget: 20 }, budget_reset_at: "2026-12-01T00:00:00Z" }, keys: [{ token: key }] });
   });
   vi.stubGlobal("fetch", fetch);
   const result = await budgetUsage(input);
   expect(result.usage.status).toBe("ok");
   if (result.usage.status !== "ok") throw new Error("expected successful usage");
   expect(result.usage.windows).toHaveLength(1);
-  expect(result.usage.windows[0]?.cost).toEqual({ usedUsdCents: 18.5, limitUsdCents: 3000 });
-  expect(result.usage.windows[0]?.usedPercent).toBeCloseTo(0.6166667);
+  expect(result.usage.windows[0]?.cost).toEqual({ usedUsdCents: 18.5, limitUsdCents: 2000 });
+  expect(result.usage.windows[0]?.usedPercent).toBeCloseTo(0.925);
   expect(JSON.stringify(result)).not.toContain(key);
   expect(await budgetUsage(input)).toEqual(result);
   expect(fetch).toHaveBeenCalledTimes(2);
@@ -61,11 +61,17 @@ it("can show the key budget when user info is forbidden, and never returns upstr
   const missing = await budgetUsage(uncapped.input);
   expect(missing.usage.status).toBe("error");
 });
+it("uses only the paid model budget for users and never falls back to max_budget", () => {
+  expect(budgetWindow({ spend: 4, max_budget: 30, metadata: { paid_model_budget: 20 } }, "user"))
+    .toMatchObject({ label: "Paid model budget", usedPercent: 20, cost: { usedUsdCents: 400, limitUsdCents: 2000 } });
+  for (const metadata of [undefined, null, {}, { paid_model_budget: null }, { paid_model_budget: 0 }, { paid_model_budget: -1 }, { paid_model_budget: "20" }])
+    expect(budgetWindow({ spend: 4, max_budget: 30, metadata }, "user")).toBeNull();
+});
 it("publishes both provider resources and fetches budget only for the requested execution host", async () => {
   const host = createFakePluginHost({ pluginId: "litellm", sdk: { hosts: { list: async () => [makeHostResponse({ id: "host-test", name: "Test machine", status: "connected" })] } },
     experimental_callHostRpc: async ({ method, hostId }) => {
       expect(method).toBe("budgetUsage"); expect(hostId).toBe("host-test");
-      return { accountKey: null, observedAt: 123, usage: { status: "ok", accountEmail: null, plan: null, planLabel: "LiteLLM", windows: [budgetWindow({ spend: 2, max_budget: 30 }, "user")] } };
+      return { accountKey: null, observedAt: 123, usage: { status: "ok", accountEmail: null, plan: null, planLabel: "LiteLLM", windows: [budgetWindow({ spend: 2, max_budget: 30, metadata: { paid_model_budget: 20 } }, "user")] } };
     } });
   try {
     await plugin(host.bb);
