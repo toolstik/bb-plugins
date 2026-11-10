@@ -20,3 +20,5 @@ bb plugin dev         # rebuild and reload on every save
 ```
 
 LiteLLM Agents 0.1.2 exposes key/user dollar budgets through the same usage contract. For a custom monetary window the label is the API-provided dollar limit (for example `$30`), followed by the used percent; spent dollars appear only in the tooltip with precise amounts. These are shared account expenses, including other LiteLLM clients. Existing five-hour and weekly labels remain unchanged.
+
+Segment details use a portaled tooltip on hover or keyboard focus, with a 200 ms hover delay and Escape to dismiss. Spending remains inside the tooltip.

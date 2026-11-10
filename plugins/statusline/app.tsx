@@ -12,6 +12,7 @@
 // window, and after a failure the last good numbers stay on screen.
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { definePluginApp, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { Limits, rpcContract, UsageWindow } from "./server";
 
@@ -281,14 +282,22 @@ function Segment({
 }) {
   const tone = level(percent, thresholds);
   return (
-    <span title={title} className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
+    <Tooltip.Provider delayDuration={200}><Tooltip.Root><Tooltip.Trigger asChild><span tabIndex={0} className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm">
       <span className={TEXT_COLOR[tone]}>{label}</span>
       <Meter percent={percent} tone={tone} />
       <span className={TEXT_COLOR[tone]}>
         {Math.round(percent)}%
       </span>
       {details}
-    </span>
+    </span></Tooltip.Trigger>
+      <Tooltip.Portal><Tooltip.Content
+        data-bb-plugin="statusline" data-bb-plugin-root="statusline"
+        side="top" sideOffset={6} collisionPadding={8}
+        className="max-w-[min(360px,calc(100vw-16px))] rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
+        style={{ zIndex: 2147483647, whiteSpace: "pre-line" }}>
+        {title}
+      </Tooltip.Content></Tooltip.Portal>
+    </Tooltip.Root></Tooltip.Provider>
   );
 }
 
