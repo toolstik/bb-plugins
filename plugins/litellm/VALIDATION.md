@@ -62,3 +62,7 @@ Live StatusLine usage_limits RPC returned status ok for both litellm-codex and l
 ## 0.1.4: paid model budget
 
 User budget denominator now comes exclusively from user_info.metadata.paid_model_budget, not user_info.max_budget. Live API reports paid_model_budget=20 and max_budget=30; the StatusLine must use $20. Spending remains user_info.spend. Regression coverage rejects missing, null, zero, negative and string metadata limits without falling back to max_budget.
+
+## 0.1.5: inherited native behavior settings
+
+Added allowlisted behavior-setting inheritance from provider-claude-code and provider-codex, refreshed at plugin load and before every corporate dispatch. Tests cover engine isolation, plan mode, subagent disablement, immediate setting updates, personal-dispatch isolation, invalid/unavailable sources and stripping unrelated/secret fields. The suite now has 22 passing tests. Gateway launch configuration and personal provider declarations remain independent.

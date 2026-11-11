@@ -1,3 +1,4 @@
+import { InheritedSettings } from "./src/inherited-settings.js";
 import { usageHostContract, usageSourceRpcContract } from "./usage-contract.js";
 import { credentialHostContract, credentialRpcContract } from "./credential-contract.js";
 import type { BbPluginApi, PluginProviderDeclaration } from "@get-bb/plugin-sdk";
@@ -51,6 +52,22 @@ export default async function plugin(bb: BbPluginApi) {
         { hostId: resource.scope.hostId, signal: context.experimental_signal });
     },
   }, { experimental_discoverable: true });
+  const inherited = new InheritedSettings(bb.sdk);
+  // Catalog and credential settings stay available even if an original provider is disabled.
+  const engines = ["claude-code", "codex"] as const;
+  const initialInheritance = await Promise.allSettled(engines.map(engine => inherited.refresh(engine)));
+  initialInheritance.forEach((result, index) => {
+    const source = `provider-${engines[index]}`;
+    if (result.status === "fulfilled") bb.log.info(`Behavior settings inherited from ${source}.`);
+    else bb.log.warn(`Behavior settings from ${source} are unavailable; corporate messages will retry reading them before dispatch.`);
+  });
+  bb.experimental_hooks.on("message.dispatch", async context => {
+    const providerId = context.requestedExecution.providerId;
+    const engine = providerId === "litellm-claude-code" ? "claude-code" : providerId === "litellm-codex" ? "codex" : null;
+    if (!engine) return { action: "proceed" };
+    try { await inherited.refresh(engine); return { action: "proceed" }; }
+    catch { return { action: "reject", message: `LiteLLM: cannot read settings from provider-${engine}. Enable the original provider and retry.` }; }
+  });
   let registrations: { dispose(): void }[] = [];
   function register(values: Awaited<ReturnType<typeof settings.get>>) {
     for (const item of registrations) item.dispose();
@@ -72,8 +89,7 @@ export default async function plugin(bb: BbPluginApi) {
         strings: { signInHint: "Set the private LiteLLM credential file in plugin settings.", expiredHint: "Renew the LiteLLM virtual key in the private credential file.", installUrl: isClaude ? "https://claude.com/claude-code" : "https://developers.openai.com/codex/cli" },
         ...(isClaude ? { completedTurnDisplay: "flat" as const } : { extensionKinds: codexExtensionKinds }),
         env: { passthrough: ["BB_CLAUDE_CODE_EXECUTABLE"] },
-        deriveProviderOptions: context => ({ memoryEnabled: false, providerSubagentsEnabled: true, sandboxEnabled: true,
-          ...(isClaude && context.promptMode === "plan" ? { claudeCodePermissionMode: "plan" } : {}) }),
+        deriveProviderOptions: context => inherited.options(engine, context.promptMode),
       };
       registrations.push(bb.providers.register(declaration));
     }

@@ -52,4 +52,14 @@ export function CredentialSettings() {
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
   </form>;
 }
-export default definePluginApp(app => { app.slots.settingsSection({ id: "credentials", title: "Ключ LiteLLM", component: CredentialSettings }); });
+function BehaviorSettings() {
+  return <div className="space-y-2 text-sm" data-bb-plugin="litellm" data-bb-plugin-root="litellm">
+    <p>LiteLLM / Claude Code использует настройки плагина Claude Code. LiteLLM / Codex использует настройки плагина Codex.</p>
+    <p className="text-muted-foreground">Память, субагенты и другие поддерживаемые параметры поведения настраиваются в основных провайдерах и применяются со следующего сообщения. Настройки моделей и подключения задаются здесь, в LiteLLM Agents.</p>
+    <p className="text-muted-foreground">Chrome и Artifacts требуют соответствующих возможностей и авторизации основного Claude Code. Reasoning и Fast не наследуются: их поддержка зависит от корпоративной модели.</p>
+  </div>;
+}
+export default definePluginApp(app => {
+  app.slots.settingsSection({ id: "credentials", title: "Ключ LiteLLM", component: CredentialSettings });
+  app.slots.settingsSection({ id: "behavior", title: "Настройки агентов", component: BehaviorSettings });
+});
