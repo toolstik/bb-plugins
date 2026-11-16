@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { definePluginApp, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
+import { definePluginApp, experimental_Icon as Icon, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { Limits, rpcContract, UsageWindow } from "./server";
 import { forecastDetails, projectedUsage } from "./forecast";
 
@@ -275,16 +275,17 @@ function Segment({
   percent,
   thresholds,
   details,
-  warning = false,
+  forecast = null,
 }: {
   title: string;
   label: string;
   percent: number;
   thresholds: Thresholds;
   details: ReactNode;
-  warning?: boolean;
+  forecast?: number | null;
 }) {
   const tone = level(percent, thresholds);
+  const forecastTone = forecast === null ? "green" : level(forecast, thresholds);
   return (
     <Tooltip.Provider delayDuration={200}><Tooltip.Root><Tooltip.Trigger asChild><span tabIndex={0} className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm">
       <span className={TEXT_COLOR[tone]}>{label}</span>
@@ -292,7 +293,11 @@ function Segment({
       <span className={TEXT_COLOR[tone]}>
         {Math.round(percent)}%
       </span>
-      {warning ? <span role="img" aria-label="Usage is projected to exceed this limit" className="font-bold text-red-500">!</span> : null}
+      {forecast === null || forecastTone === "green" ? null : <Icon
+        name={forecastTone === "yellow" ? "AlertTriangle" : "AlertCircle"}
+        aria-label={`Projected usage: ${Math.round(forecast)}% of the limit (${forecastTone} zone)`}
+        className={`h-3 w-3 shrink-0 ${TEXT_COLOR[forecastTone]}`}
+      />}
       {details}
     </span></Tooltip.Trigger>
       <Tooltip.Portal><Tooltip.Content
@@ -354,7 +359,7 @@ function WindowSegment({ window, observedAt, now, stale }: { window: UsageWindow
       label={windowLabel(window)}
       percent={percent}
       thresholds={LIMIT_THRESHOLDS}
-      warning={forecast !== null && forecast > 100}
+      forecast={forecast}
       details={reset === null ? null : <span>↻ {reset}</span>}
     />
   );
