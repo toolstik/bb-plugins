@@ -17,6 +17,7 @@
   },
   "include": [
     "server.ts",
-    "app.tsx"
+    "app.tsx",
+    "forecast.ts"
   ]
 }

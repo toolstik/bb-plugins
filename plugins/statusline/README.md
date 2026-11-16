@@ -22,3 +22,7 @@ bb plugin dev         # rebuild and reload on every save
 LiteLLM Agents 0.1.2 exposes key/user dollar budgets through the same usage contract. For a custom monetary window the label is the API-provided dollar limit (for example `$30`), followed by the used percent; spent dollars appear only in the tooltip with precise amounts. These are shared account expenses, including other LiteLLM clients. Existing five-hour and weekly labels remain unchanged.
 
 Segment details use a portaled tooltip on hover or keyboard focus, with a 200 ms hover delay and Escape to dismiss. Spending remains inside the tooltip.
+
+A red `!` beside a limit's percentage warns when projected usage at reset exceeds 100%. The tooltip shows the projected percentage and the expected excess as a percentage of the allowance. The calculation divides the used percentage by the fraction of the quota period elapsed: 60% used halfway through projects 120%, or 20% over the allowance. Five-hour, daily and weekly windows have known durations; their start is the reset time minus that duration. Custom windows with unknown durations have no forecast. The calculation uses the provider's measurement timestamp and skips failed refreshes, missing timestamps, and expired periods. No usage history is collected.
+
+Run forecast checks with `node --experimental-strip-types --test forecast.test.ts` (Node 22.6+).

@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { definePluginApp, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { Limits, rpcContract, UsageWindow } from "./server";
+import { forecastDetails, projectedUsage } from "./forecast";
 
 const CONTEXT_POLL_RUNNING_MS = 5_000;
 const CONTEXT_POLL_IDLE_MS = 60_000;
@@ -30,6 +31,7 @@ type OkUsage = NonNullable<Limits["usage"]>;
 interface LimitsState {
   /** Last successful measurement, kept through later failures. */
   usage: OkUsage | null;
+  observedAt: number | null;
   /** Why the latest attempt failed, or null when it succeeded. */
   error: string | null;
   fetchedAt: number | null;
@@ -47,7 +49,7 @@ const limitsByProvider = new Map<string, LimitsEntry>();
 function limitsEntry(providerId: string): LimitsEntry {
   let entry = limitsByProvider.get(providerId);
   if (entry === undefined) {
-    entry = { state: { usage: null, error: null, fetchedAt: null }, inflight: false, listeners: new Set() };
+    entry = { state: { usage: null, observedAt: null, error: null, fetchedAt: null }, inflight: false, listeners: new Set() };
     limitsByProvider.set(providerId, entry);
   }
   return entry;
@@ -58,13 +60,13 @@ function refreshLimits(rpc: Rpc, providerId: string): void {
   const last = entry.state.fetchedAt;
   if (entry.inflight || (last !== null && Date.now() - last < LIMITS_MIN_INTERVAL_MS)) return;
   entry.inflight = true;
-  const previous = entry.state.usage;
+  const previous = { usage: entry.state.usage, observedAt: entry.state.observedAt };
   rpc
     .call("usage_limits", { providerId })
     .then(
       (result): Omit<LimitsState, "fetchedAt"> =>
-        result.usage !== null ? { usage: result.usage, error: null } : { usage: previous, error: result.error },
-      (cause: unknown) => ({ usage: previous, error: cause instanceof Error ? cause.message : String(cause) }),
+        result.usage !== null ? { usage: result.usage, observedAt: result.observedAt, error: null } : { ...previous, error: result.error },
+      (cause: unknown) => ({ ...previous, error: cause instanceof Error ? cause.message : String(cause) }),
     )
     .then((next) => {
       entry.state = { ...next, fetchedAt: Date.now() };
@@ -273,12 +275,14 @@ function Segment({
   percent,
   thresholds,
   details,
+  warning = false,
 }: {
   title: string;
   label: string;
   percent: number;
   thresholds: Thresholds;
   details: ReactNode;
+  warning?: boolean;
 }) {
   const tone = level(percent, thresholds);
   return (
@@ -288,6 +292,7 @@ function Segment({
       <span className={TEXT_COLOR[tone]}>
         {Math.round(percent)}%
       </span>
+      {warning ? <span role="img" aria-label="Usage is projected to exceed this limit" className="font-bold text-red-500">!</span> : null}
       {details}
     </span></Tooltip.Trigger>
       <Tooltip.Portal><Tooltip.Content
@@ -327,11 +332,12 @@ function ContextSegment({ usage }: { usage: ContextUsage }) {
   );
 }
 
-function WindowSegment({ window, now, stale }: { window: UsageWindow; now: number; stale: boolean }) {
+function WindowSegment({ window, observedAt, now, stale }: { window: UsageWindow; observedAt: number | null; now: number; stale: boolean }) {
   const percent = window.usedPercent;
   const reset = window.resetsAt === null ? null : formatReset(window.resetsAt, window.kind, now);
   const resetAt = window.resetsAt === null ? null : resetDate(window.resetsAt);
-  const title = [
+  const forecast = stale ? null : projectedUsage(window, observedAt, now);
+  const summary = [
     `${window.label}: ${Math.round(percent)}% used`,
     window.cost ? `$${(window.cost.usedUsdCents / 100).toFixed(4)} of $${(window.cost.limitUsdCents / 100).toFixed(2)}` : null,
     resetAt === null
@@ -341,12 +347,14 @@ function WindowSegment({ window, now, stale }: { window: UsageWindow; now: numbe
   ]
     .filter((part) => part !== null)
     .join(" · ");
+  const title = forecast === null ? summary : `${summary}\n${forecastDetails(forecast)}`;
   return (
     <Segment
       title={title}
       label={windowLabel(window)}
       percent={percent}
       thresholds={LIMIT_THRESHOLDS}
+      warning={forecast !== null && forecast > 100}
       details={reset === null ? null : <span>↻ {reset}</span>}
     />
   );
@@ -375,7 +383,7 @@ function visibleWindows(windows: UsageWindow[], model: string | null): UsageWind
 }
 
 function LimitsSegments({ limits, model, now }: { limits: LimitsState; model: string | null; now: number }) {
-  const { usage, error } = limits;
+  const { usage, error, observedAt } = limits;
   if (usage === null) {
     if (error === null) return null;
     return (
@@ -392,7 +400,7 @@ function LimitsSegments({ limits, model, now }: { limits: LimitsState; model: st
       className={`inline-flex flex-wrap items-center gap-x-4 gap-y-1 ${stale ? "opacity-60" : ""}`}
     >
       {windows.map((window, index) => (
-        <WindowSegment key={`${window.label}-${index}`} window={window} now={now} stale={stale} />
+        <WindowSegment key={`${window.label}-${index}`} window={window} observedAt={observedAt} now={now} stale={stale} />
       ))}
     </span>
   );
