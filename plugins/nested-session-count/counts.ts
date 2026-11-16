@@ -11,9 +11,9 @@ export function countChildren(threads: readonly Thread[]): Map<string, number> {
 }
 
 export function countStyles(counts: ReadonlyMap<string, number>): string {
-  // The direct-child chain avoids matching a descendant's disclosure button.
+  // Scope to this thread's content so nested wrappers do not hide the button.
   return [...counts].map(([id, count]) => {
-    const button = `[data-sidebar-rename-row]:has(> span > a[data-sidebar-thread-id="${CSS.escape(id)}"]) > span > button[aria-expanded]`;
+    const button = `[data-sidebar-rename-row] > span:has(> a[data-sidebar-thread-id="${CSS.escape(id)}"]) button[aria-expanded][data-sidebar-rename-anchor]`;
     return `${button} {
       width: auto; min-width: 20px; gap: 3px; opacity: 1; visibility: visible;
     }
