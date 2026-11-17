@@ -285,7 +285,7 @@ function Segment({
   forecast?: number | null;
 }) {
   const tone = level(percent, thresholds);
-  const forecastTone = forecast === null ? "green" : level(forecast, thresholds);
+  const forecastTone: Level = forecast === null || forecast <= LIMIT_THRESHOLDS.redFrom ? "green" : forecast > 100 ? "red" : "yellow";
   return (
     <Tooltip.Provider delayDuration={200}><Tooltip.Root><Tooltip.Trigger asChild><span tabIndex={0} className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm">
       <span className={TEXT_COLOR[tone]}>{label}</span>
@@ -295,7 +295,7 @@ function Segment({
       </span>
       {forecast === null || forecastTone === "green" ? null : <Icon
         name={forecastTone === "yellow" ? "AlertTriangle" : "AlertCircle"}
-        aria-label={`Projected usage: ${Math.round(forecast)}% of the limit (${forecastTone} zone)`}
+        aria-label={`Projected usage: ${Math.round(forecast)}% of the limit (${forecastTone === "red" ? "over limit" : "high usage"})`}
         className={`h-3 w-3 shrink-0 ${TEXT_COLOR[forecastTone]}`}
       />}
       {details}
