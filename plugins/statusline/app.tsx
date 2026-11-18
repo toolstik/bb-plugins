@@ -65,7 +65,9 @@ function refreshLimits(rpc: Rpc, providerId: string): void {
     .call("usage_limits", { providerId })
     .then(
       (result): Omit<LimitsState, "fetchedAt"> =>
-        result.usage !== null ? { usage: result.usage, observedAt: result.observedAt, error: null } : { ...previous, error: result.error },
+        result.usage !== null
+          ? { usage: result.usage, observedAt: result.observedAt ?? Date.now(), error: null }
+          : { ...previous, error: result.error },
       (cause: unknown) => ({ ...previous, error: cause instanceof Error ? cause.message : String(cause) }),
     )
     .then((next) => {
@@ -170,12 +172,12 @@ function useThreadModel(sdk: Sdk, threadId: string | null, picked: string | null
 }
 
 function useNow(): number {
-  const [now, setNow] = useState(() => Date.now());
+  const [, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
     return () => clearInterval(timer);
   }, []);
-  return now;
+  return Date.now();
 }
 
 function formatTokens(tokens: number): string {
@@ -314,11 +316,11 @@ function ContextSegment({ usage }: { usage: ContextUsage }) {
   );
 }
 
-function WindowSegment({ window, observedAt, now, stale }: { window: UsageWindow; observedAt: number | null; now: number; stale: boolean }) {
+function WindowSegment({ window, observedAt, now, error }: { window: UsageWindow; observedAt: number | null; now: number; error: string | null }) {
   const percent = window.usedPercent;
   const reset = window.resetsAt === null ? null : formatReset(window.resetsAt, window.kind, now);
   const resetAt = window.resetsAt === null ? null : resetDate(window.resetsAt);
-  const forecast = stale ? null : projectedUsage(window, observedAt, now);
+  const forecast = projectedUsage(window, observedAt, now);
   const projectedTone = forecast === null ? null : limitUsageTone(forecast);
   const summary = [
     `${window.label}: ${Math.round(percent)}% used`,
@@ -326,7 +328,7 @@ function WindowSegment({ window, observedAt, now, stale }: { window: UsageWindow
     resetAt === null
       ? null
       : `resets ${resetAt.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`,
-    stale ? "stale" : null,
+    error === null ? null : `Last refresh failed: ${error}`,
   ]
     .filter((part) => part !== null)
     .join(" · ");
@@ -383,15 +385,11 @@ function LimitsSegments({ limits, model, now }: { limits: LimitsState; model: st
       </span>
     );
   }
-  const stale = error !== null;
   const windows = visibleWindows(usage.windows as UsageWindow[], model);
   return (
-    <span
-      title={stale ? `Last refresh failed: ${error}` : undefined}
-      className={`inline-flex flex-wrap items-center gap-x-4 gap-y-1 ${stale ? "opacity-60" : ""}`}
-    >
+    <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
       {windows.map((window, index) => (
-        <WindowSegment key={`${window.label}-${index}`} window={window} observedAt={observedAt} now={now} stale={stale} />
+        <WindowSegment key={`${window.label}-${index}`} window={window} observedAt={observedAt} now={now} error={error} />
       ))}
     </span>
   );

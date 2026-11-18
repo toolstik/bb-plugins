@@ -106,8 +106,8 @@ export default async function plugin(bb: BbPluginApi) {
               errors.push(`${pluginId}: ${String(reason)}`);
               continue;
             }
-            const observedAt = result.observedAt ?? 0;
-            if (best === null || observedAt > (best.observedAt ?? 0)) {
+            const observedAt = result.observedAt;
+            if (best === null || (observedAt ?? 0) > (best.observedAt ?? 0)) {
               best = { usage: ok.data, source: pluginId, observedAt, error: null };
             }
           }
