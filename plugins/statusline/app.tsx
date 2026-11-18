@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { definePluginApp, experimental_Icon as Icon, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { Limits, rpcContract, UsageWindow } from "./server";
-import { forecastDetails, projectedUsage } from "./forecast";
+import { forecastDetails, limitTone, limitUsageTone, projectedUsage, type UsageTone } from "./forecast";
 
 const CONTEXT_POLL_RUNNING_MS = 5_000;
 const CONTEXT_POLL_IDLE_MS = 60_000;
@@ -227,37 +227,24 @@ function windowLabel(window: UsageWindow): string {
   }
 }
 
-// Same thresholds as the Claude Code status line script
-// (~/.claude/statusline-command.sh): green below yellowFrom, yellow up to
-// redFrom, red from it.
-interface Thresholds {
-  yellowFrom: number;
-  redFrom: number;
-}
-const CONTEXT_THRESHOLDS: Thresholds = { yellowFrom: 40, redFrom: 50 };
-const LIMIT_THRESHOLDS: Thresholds = { yellowFrom: 50, redFrom: 80 };
-
-type Level = "green" | "yellow" | "red";
-
-function level(percent: number, { yellowFrom, redFrom }: Thresholds): Level {
-  const rounded = Math.round(percent);
-  if (rounded >= redFrom) return "red";
-  if (rounded >= yellowFrom) return "yellow";
+function contextTone(percent: number): UsageTone {
+  if (percent >= 80) return "red";
+  if (percent >= 65) return "yellow";
   return "green";
 }
 
-const TEXT_COLOR: Record<Level, string> = {
+const TEXT_COLOR: Record<UsageTone, string> = {
   green: "text-green-500",
   yellow: "text-yellow-500",
   red: "text-red-500",
 };
-const FILL_COLOR: Record<Level, string> = {
+const FILL_COLOR: Record<UsageTone, string> = {
   green: "bg-green-500",
   yellow: "bg-yellow-500",
   red: "bg-red-500",
 };
 
-function Meter({ percent, tone }: { percent: number; tone: Level }) {
+function Meter({ percent, tone }: { percent: number; tone: UsageTone }) {
   return (
     <span aria-hidden className="relative inline-block h-1.5 w-10 overflow-hidden rounded-full bg-border">
       <span
@@ -268,24 +255,19 @@ function Meter({ percent, tone }: { percent: number; tone: Level }) {
   );
 }
 
-/** Label and percent in the threshold color, the details muted. */
 function Segment({
   title,
   label,
   percent,
-  thresholds,
+  tone,
   details,
-  forecast = null,
 }: {
   title: string;
   label: string;
   percent: number;
-  thresholds: Thresholds;
+  tone: UsageTone;
   details: ReactNode;
-  forecast?: number | null;
 }) {
-  const tone = level(percent, thresholds);
-  const forecastTone: Level = forecast === null || forecast <= LIMIT_THRESHOLDS.redFrom ? "green" : forecast > 100 ? "red" : "yellow";
   return (
     <Tooltip.Provider delayDuration={200}><Tooltip.Root><Tooltip.Trigger asChild><span tabIndex={0} className="inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm">
       <span className={TEXT_COLOR[tone]}>{label}</span>
@@ -293,11 +275,6 @@ function Segment({
       <span className={TEXT_COLOR[tone]}>
         {Math.round(percent)}%
       </span>
-      {forecast === null || forecastTone === "green" ? null : <Icon
-        name={forecastTone === "yellow" ? "AlertTriangle" : "AlertCircle"}
-        aria-label={`Projected usage: ${Math.round(forecast)}% of the limit (${forecastTone === "red" ? "over limit" : "high usage"})`}
-        className={`h-3 w-3 shrink-0 ${TEXT_COLOR[forecastTone]}`}
-      />}
       {details}
     </span></Tooltip.Trigger>
       <Tooltip.Portal><Tooltip.Content
@@ -327,7 +304,7 @@ function ContextSegment({ usage }: { usage: ContextUsage }) {
       title={title}
       label="ctx"
       percent={percent}
-      thresholds={CONTEXT_THRESHOLDS}
+      tone={contextTone(percent)}
       details={
         <span>
           {formatTokens(usage.usedTokens)}/{formatTokens(window)}
@@ -342,6 +319,7 @@ function WindowSegment({ window, observedAt, now, stale }: { window: UsageWindow
   const reset = window.resetsAt === null ? null : formatReset(window.resetsAt, window.kind, now);
   const resetAt = window.resetsAt === null ? null : resetDate(window.resetsAt);
   const forecast = stale ? null : projectedUsage(window, observedAt, now);
+  const projectedTone = forecast === null ? null : limitUsageTone(forecast);
   const summary = [
     `${window.label}: ${Math.round(percent)}% used`,
     window.cost ? `$${(window.cost.usedUsdCents / 100).toFixed(4)} of $${(window.cost.limitUsdCents / 100).toFixed(2)}` : null,
@@ -358,9 +336,17 @@ function WindowSegment({ window, observedAt, now, stale }: { window: UsageWindow
       title={title}
       label={windowLabel(window)}
       percent={percent}
-      thresholds={LIMIT_THRESHOLDS}
-      forecast={forecast}
-      details={reset === null ? null : <span>↻ {reset}</span>}
+      tone={limitTone(percent, projectedTone)}
+      details={
+        <>
+          {forecast !== null && (projectedTone === "yellow" || projectedTone === "red") && <Icon
+            name={projectedTone === "yellow" ? "AlertTriangle" : "AlertCircle"}
+            aria-label={`Projected usage: ${Math.round(forecast)}% of the limit (${forecast > 100 ? "over limit" : "high usage"})`}
+            className={`h-3 w-3 shrink-0 ${TEXT_COLOR[projectedTone]}`}
+          />}
+          {reset === null ? null : <span>↻ {reset}</span>}
+        </>
+      }
     />
   );
 }

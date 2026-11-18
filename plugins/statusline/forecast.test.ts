@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { forecastDetails, projectedUsage } from "./forecast.ts";
+import { forecastDetails, limitTone, limitUsageTone, projectedUsage } from "./forecast.ts";
 
 const HOUR = 60 * 60 * 1_000;
 const START = Date.parse("2026-11-16T00:00:00Z");
@@ -46,6 +46,27 @@ test("suppresses expired windows and invalid usage", () => {
   assert.equal(projectedUsage(quota(), at, START + 6 * HOUR), null);
   for (const usedPercent of [-1, NaN, Infinity]) {
     assert.equal(projectedUsage(quota("five-hour", usedPercent), at, at), null);
+  }
+});
+
+test("limit meters use the forecast color once actual usage reaches 10%", () => {
+  assert.equal(limitTone(9.99, "red"), "green");
+  assert.equal(limitTone(10, "yellow"), "yellow");
+  assert.equal(limitTone(10, "red"), "red");
+  assert.equal(limitTone(55, "green"), "green");
+});
+
+test("forecast and actual usage share the same exact limit color thresholds", () => {
+  for (const [percent, tone] of [
+    [0, "green"],
+    [80, "green"],
+    [80.01, "yellow"],
+    [97.99, "yellow"],
+    [98, "red"],
+    [100, "red"],
+  ] as const) {
+    assert.equal(limitUsageTone(percent), tone);
+    assert.equal(limitTone(percent, null), tone);
   }
 });
 

@@ -23,6 +23,19 @@ export function projectedUsage(window: ForecastWindow, observedAt: number | null
   return Number.isFinite(projected) ? projected : null;
 }
 
+export type UsageTone = "green" | "yellow" | "red";
+
+export function limitUsageTone(percent: number): UsageTone {
+  if (percent >= 98) return "red";
+  if (percent > 80) return "yellow";
+  return "green";
+}
+
+export function limitTone(usedPercent: number, projectedTone: UsageTone | null): UsageTone {
+  if (usedPercent < 10) return "green";
+  return projectedTone ?? limitUsageTone(usedPercent);
+}
+
 export function forecastDetails(projected: number): string {
   // Round upward so a real overage never appears as a forecast of exactly 100%.
   const percent = Math.ceil(projected * 10) / 10;

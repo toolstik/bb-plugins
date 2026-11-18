@@ -9,7 +9,7 @@ A model-specific window (the Fable weekly limit) shows only while the thread run
 
 Context usage comes from `sdk.threads.context` and is polled every 5 s while the agent runs, every minute otherwise. Limits come from the plugin's server: its `usage_limits` RPC finds every bb usage source (`provider-usage.v1` RPC: the provider plugins and Account Pooler), reads each one's cached measurement for the thread's provider without forcing a new provider check, and returns the most recent successful one. One source can be throttled by Anthropic while another still has fresh numbers. The server caches the answer for 30 s; the frontend asks once a minute and after each finished turn, shared by all composers of a window. When no source has numbers, the last good ones stay on screen dimmed, with the error in the tooltip.
 
-The bar shows in thread composers and in the new-thread composer (limits only, for the selected provider). Colors follow the thresholds of the Claude Code status line script `~/.claude/statusline-command.sh`: `ctx` is green below 40%, yellow from 40%, red from 50%; limit windows are green below 50%, yellow from 50%, red from 80%. The label, meter and percent take the color, the rest stays muted.
+The bar shows in thread composers and in the new-thread composer (limits only, for the selected provider). Context usage is green below 65%, yellow from 65% to below 80%, and red from 80%. Limit meter fill and the displayed percentage show actual usage.
 
 ## Develop
 
@@ -23,6 +23,8 @@ LiteLLM Agents 0.1.2 exposes key/user dollar budgets through the same usage cont
 
 Segment details use a portaled tooltip on hover or keyboard focus, with a 200 ms hover delay and Escape to dismiss. Spending remains inside the tooltip.
 
-Forecast indicators use a yellow triangle with an exclamation mark when projected usage exceeds 80%, a red circle with an exclamation mark when it exceeds 100%, and no icon at or below 80%. These checks use the unrounded forecast. Colors and thresholds for actual usage percentages stay unchanged. The tooltip shows the projected percentage and, when it exceeds 100%, the expected excess as a percentage of the allowance. The calculation divides the used percentage by the fraction of the quota period elapsed: 60% used halfway through projects 120%, or 20% over the allowance. Five-hour, daily and weekly windows have known durations; their start is the reset time minus that duration. Custom windows with unknown durations have no forecast. The calculation uses the provider's measurement timestamp and skips failed refreshes, missing timestamps, and expired periods. No usage history is collected.
+From 10% actual usage, the limit meter, percentage, and label follow the forecast when available and actual usage otherwise. Both use the same thresholds before rounding. The color is green through 80%, yellow above 80% and below 98%, and red from 98%. The forecast indicator shows a yellow triangle or a red circle for the corresponding forecast zone. Below 10% actual usage the meter, percentage, and label stay green, and the warning icon still shows the forecast risk.
+
+The tooltip shows the projected percentage and any expected excess above 100%. The calculation divides the used percentage by the fraction of the quota period elapsed. For example, 60% used halfway through projects 120%, or 20% over the allowance. Five-hour, daily, and weekly windows start one known duration before their reset time. The calculation uses the provider's measurement timestamp and skips windows with unknown durations, failed refreshes, missing timestamps, and expired periods. No usage history is collected.
 
 Run forecast checks with `node --experimental-strip-types --test forecast.test.ts` (Node 22.6+).
