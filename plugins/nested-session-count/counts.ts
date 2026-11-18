@@ -14,11 +14,12 @@ export function countStyles(counts: ReadonlyMap<string, number>): string {
   // Scope to this thread's content so nested wrappers do not hide the button.
   return [...counts].map(([id, count]) => {
     const button = `[data-sidebar-rename-row] > span:has(> a[data-sidebar-thread-id="${CSS.escape(id)}"]) button[aria-expanded][data-sidebar-rename-anchor]`;
+    // The host uses ::after to extend the button's touch target.
     return `${button} {
       width: auto; min-width: 20px; gap: 3px; opacity: 1; visibility: visible;
     }
     ${button}::before {
-      content: "${count}"; font-size: 11px; line-height: 1;
+      content: "${count}"; order: 1; font-size: 11px; line-height: 1;
       font-variant-numeric: tabular-nums; font-weight: 400;
       color: var(--muted-foreground); pointer-events: none;
     }`;
