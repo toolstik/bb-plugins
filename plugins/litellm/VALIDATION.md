@@ -66,3 +66,11 @@ User budget denominator now comes exclusively from user_info.metadata.paid_model
 ## 0.1.5: inherited native behavior settings
 
 Added allowlisted behavior-setting inheritance from provider-claude-code and provider-codex, refreshed at plugin load and before every corporate dispatch. Tests cover engine isolation, plan mode, subagent disablement, immediate setting updates, personal-dispatch isolation, invalid/unavailable sources and stripping unrelated/secret fields. The suite now has 22 passing tests. Gateway launch configuration and personal provider declarations remain independent.
+
+## Обновление 0.1.6: совместимость с BB 0.50.1
+
+- Проверено 2026-11-19 на BB 0.50.1, Plugin SDK 0.6.157.
+- Диапазоны совместимости: BB >=0.49.0 и Plugin SDK >=0.6.132, без верхних границ. Зависимость SDK для сборки зафиксирована на 0.6.157.
+- Все 22 теста в 8 файлах, проверка типов, проверка версии деклараций и сборка прошли.
+- После перезагрузки litellm@0.1.6 имеет статус running. Оба корпоративных провайдера зарегистрированы; логи подтверждают наследование настроек от основных провайдеров.
+- Совместимость со следующими версиями BB подтверждаем отдельно при изменениях API.

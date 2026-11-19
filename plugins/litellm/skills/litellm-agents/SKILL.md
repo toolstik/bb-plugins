@@ -22,3 +22,5 @@ The source README documents building, conformance tests and an explicit live smo
 The user budget limit must come exclusively from user_info.metadata.paid_model_budget, with spending from user_info.spend. Do not substitute user_info.max_budget. Missing/invalid paid_model_budget means no user budget window. Key budgets still use info.max_budget.
 
 Behavior settings are inherited from provider-claude-code / provider-codex through bb.sdk.plugins.getSettings on load and before each corporate message dispatch. Configure memory and subagents in those original plugins, not in LiteLLM. Claude also inherits workflowsDisabled, disable1MContext, chromeEnabled, artifactsEnabled, sandboxEnabled, fullAccessApprovalsEnabled, commandDescriptionsEnabled. Missing/malformed source settings reject dispatch rather than keeping stale flags. Personal credentials, routing and model catalogs are never inherited. Changes apply on the next message. Reasoning/Fast support remains gateway-specific.
+
+Compatibility requires BB >=0.49.0 and Plugin SDK >=0.6.132 with no upper version bounds. The build pins SDK 0.6.157; this dependency pin is separate from runtime compatibility ranges.
