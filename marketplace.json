@@ -159,6 +159,23 @@
           "ref": "main"
         }
       }
+    },
+    {
+      "id": "work-delegation",
+      "displayName": "Work Delegation",
+      "description": "Delegate substantial work across BB projects and keep the main thread focused on decisions, status, and results.",
+      "icon": "Workflow",
+      "author": {
+        "name": "Viktor Tolstik",
+        "github": "toolstik"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/toolstik/bb-plugins.git",
+          "subdir": "plugins/work-delegation",
+          "ref": "main"
+        }
+      }
     }
   ]
 }
