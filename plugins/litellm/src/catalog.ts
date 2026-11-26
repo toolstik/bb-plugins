@@ -24,7 +24,7 @@ export function parseCatalog(data: unknown, options: GatewayOptions, info = new 
     if (options.modelAllowlist.length && !options.modelAllowlist.includes(id) && !options.modelAllowlist.includes(model)) continue;
     if (seen.has(model)) continue;
     seen.add(model);
-    const supportedReasoningEfforts = modelEfforts(options.engine, id, model, info);
+    const supportedReasoningEfforts = modelEfforts(id, model, info);
     models.push({ id: model, model, displayName: id, description: "Corporate LiteLLM. Agent compatibility depends on the upstream model.",
       reasoningDiscovery: "known", supportedReasoningEfforts, defaultReasoningEffort: supportedReasoningEfforts.length ? defaultEffort : "medium", isDefault: false });
     if (models.length === 1000) break;
@@ -62,7 +62,7 @@ export class CatalogClient {
     const key = await readCredential(options.keyFile);
     const fingerprint = createHash("sha256").update(JSON.stringify(options)).update(key).digest("hex");
     if (!force && this.cache?.fingerprint === fingerprint && this.cache.expires > Date.now()) return structuredClone(this.cache.value);
-    const modelInfo = fetchModelInfo(options.baseUrl, key, AbortSignal.timeout(3_000));
+    const modelInfo = fetchModelInfo(options.baseUrl, key, AbortSignal.timeout(8_000));
     let response: Response;
     try {
       response = await fetch(`${options.baseUrl}/v1/models`, {
@@ -74,8 +74,10 @@ export class CatalogClient {
     if (body.length > 2_000_000) throw new Error("LiteLLM model catalog exceeds size limit.");
     let json: unknown;
     try { json = JSON.parse(body); } catch { throw new Error("LiteLLM model catalog is not JSON."); }
-    const value = parseCatalog(json, options, await modelInfo);
-    this.cache = { fingerprint, expires: Date.now() + 60_000, value };
+    const info = await modelInfo;
+    const value = parseCatalog(json, options, info);
+    const ttl = info.size ? 60_000 : 5_000;
+    this.cache = { fingerprint, expires: Date.now() + ttl, value };
     return structuredClone(value);
   }
 }

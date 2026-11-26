@@ -1,5 +1,4 @@
 import type { ModelReasoningEffort } from "@get-bb/plugin-sdk/provider-bridge";
-import type { Engine } from "./config.js";
 
 const levels = ["none", "low", "medium", "high", "xhigh", "max"] as const;
 type Effort = typeof levels[number];
@@ -10,12 +9,10 @@ export const defaultEffort = "effort-default";
 const standard = ["low", "medium", "high", "xhigh"] as const;
 const maximum = [...standard, "max"] as const;
 const optional = ["none", ...standard] as const;
-const claudeProfiles = new Map<string, readonly Effort[]>([
+const modelProfiles = new Map<string, readonly Effort[]>([
   ["claude-fable-5-1", maximum],
   ["claude-opus-5-5", maximum],
   ["claude-sonnet-5", maximum],
-]);
-const codexProfiles = new Map<string, readonly Effort[]>([
   ["gpt-5.3-codex", standard],
   ["gpt-5.4-mini", optional],
   ["gpt-5.6-sol", optional],
@@ -31,11 +28,11 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-export function modelEfforts(engine: Engine, id: string, model: string, info: Map<string, unknown[]>): ModelReasoningEffort[] {
-  const profiles = engine === "claude-code" ? claudeProfiles : codexProfiles;
+export function modelEfforts(id: string, model: string, info: Map<string, unknown[]>): ModelReasoningEffort[] {
   function profile(name: string) {
     const canonical = name.split("/").at(-1)!.toLowerCase();
-    return profiles.get(engine === "claude-code" ? canonical.replaceAll(".", "-") : canonical) ?? [];
+    const modelId = canonical.startsWith("claude-") ? canonical.replaceAll(".", "-") : canonical;
+    return modelProfiles.get(modelId) ?? [];
   }
   const deployments = info.get(model) ?? info.get(id);
   const supported = deployments ? levels.filter(level => deployments.every(deployment => {
@@ -55,7 +52,7 @@ export function modelEfforts(engine: Engine, id: string, model: string, info: Ma
 }
 
 export const effortLabels = [
-  { id: defaultEffort, label: "По умолчанию" },
+  { id: defaultEffort, label: "Default" },
   ...levels.map(level => ({ id: "effort-" + level, label: level })),
 ];
 

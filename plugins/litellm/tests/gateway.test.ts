@@ -70,6 +70,25 @@ describe("corporate gateway", () => {
     expect(reasoningSelection(model.id, "medium", model.supportedReasoningEfforts)?.effort).toBeUndefined();
     expect(reasoningSelection(model.id, "effort-medium", model.supportedReasoningEfforts)?.effort).toBe("medium");
   });
+  it("offers the same levels for Anthropic and OpenAI models through either agent", () => {
+    const gpt = "Corporate GPT";
+    const claude = "Corporate Claude";
+    const data = { data: [{ id: gpt }, { id: claude }] };
+    const info = new Map([
+      [gpt, [{ litellm_params: { model: "openai/gpt-6-sol" } }]],
+      [claude, [{ litellm_params: { model: "anthropic/claude-opus-5.5" } }]],
+    ]);
+    for (const engine of ["claude-code", "codex"] as const) {
+      const options = parseOptions({ engine, keyFile: "/tmp/key" });
+      const [gptModel, claudeModel] = parseCatalog(data, options, info).models;
+      expect(gptModel?.supportedReasoningEfforts.map(level => level.reasoningEffort)).toEqual([
+        "effort-default", "effort-none", "effort-low", "effort-medium", "effort-high", "effort-xhigh", "effort-max",
+      ]);
+      expect(claudeModel?.supportedReasoningEfforts.map(level => level.reasoningEffort)).toEqual([
+        "effort-default", "effort-low", "effort-medium", "effort-high", "effort-xhigh", "effort-max",
+      ]);
+    }
+  });
   it("sets the selected effort on both routes and isolates concurrent chats using the same model", async () => {
     const { options } = await fixture(async (_req, res) => {
       const chunks: Buffer[] = [];
