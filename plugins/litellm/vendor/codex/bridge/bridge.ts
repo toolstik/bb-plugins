@@ -379,10 +379,11 @@ function appServerLaunchEnv(
 
 function buildAppServerEnv(
   envVars: Readonly<Record<string, string>> | undefined,
+  threadId: string | null,
 ): NodeJS.ProcessEnv {
   return withoutBridgeRuntimeEnv(
     sanitizeInheritedChildProcessEnv({
-      env: { ...appServerLaunchEnv(envVars), ...corporateCodexEnv() },
+      env: { ...appServerLaunchEnv(envVars), ...corporateCodexEnv(threadId) },
     }),
   );
 }
@@ -966,7 +967,7 @@ function spawnChildConnection(callbacks: {
   ) => void;
   onExit: (info: CodexAppServerExitInfo) => void;
 }): CodexAppServerConnection {
-  const env = buildAppServerEnv(callbacks.envVars);
+  const env = buildAppServerEnv(callbacks.envVars, callbacks.recordThreadId);
   const launch = resolveAppServerLaunch(appServerLaunchEnv(callbacks.envVars));
   const { envVars: _envVars, ...connectionCallbacks } = callbacks;
   return createCodexAppServerConnection({

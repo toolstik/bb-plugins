@@ -1,3 +1,4 @@
+import { effortLabels } from "./src/effort.js";
 import { InheritedSettings } from "./src/inherited-settings.js";
 import { usageHostContract, usageSourceRpcContract } from "./usage-contract.js";
 import { credentialHostContract, credentialRpcContract } from "./credential-contract.js";
@@ -85,6 +86,7 @@ export default async function plugin(bb: BbPluginApi) {
         capabilities: { supportsServiceTier: false, supportsNativeUserQuestion: isClaude, fork: "checkpoint",
           supportsManualCompaction: true, supportsThreadArchive: false, supportsThreadRename: false,
           permissionModes: ["accept-edits", "auto", "full"], reasoningLevels: ["medium"] },
+        reasoningLevels: effortLabels,
         composerActions: ["plan"], models: { scope: "host" },
         strings: { signInHint: "Set the private LiteLLM credential file in plugin settings.", expiredHint: "Renew the LiteLLM virtual key in the private credential file.", installUrl: isClaude ? "https://claude.com/claude-code" : "https://developers.openai.com/codex/cli" },
         ...(isClaude ? { completedTurnDisplay: "flat" as const } : { extensionKinds: codexExtensionKinds }),

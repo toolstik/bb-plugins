@@ -9,6 +9,7 @@ import {
 } from "@get-bb/plugin-sdk/provider-bridge";
 import { parseOptions, type GatewayOptions } from "./config.js";
 import { CatalogClient } from "./catalog.js";
+import { reasoningSelection } from "./effort.js";
 import { GatewayProxy } from "./proxy.js";
 import { setGatewayProxy } from "./runtime.js";
 
@@ -94,6 +95,7 @@ export function createCorporateBridge(): ProviderBridgeEntry & { dispose(): Prom
         installedVersion: executable ? await experimental_readCliVersion(command) : null, minimumSupportedVersion: null,
         canInstall: false, canUpdate: false, loginCommand: null, localLoginCommand: null } }); return;
     }
+    let selection: ReturnType<typeof reasoningSelection>;
     // Never let a missing key or empty catalog fall through to a personal login.
     if (["thread/start", "thread/resume", "thread/fork", "turn/start", "turn/steer"].includes(method)) {
       const list = await catalog.list(options);
@@ -101,10 +103,18 @@ export function createCorporateBridge(): ProviderBridgeEntry & { dispose(): Prom
         params.options.model ||= list.models.find(model => model.isDefault)!.model;
         params.options.model = options.modelAliases[params.options.model] ?? params.options.model;
         if (options.modelAllowlist.length && !list.models.some(model => model.model === params.options.model)) throw new Error("Selected model is outside the corporate model allowlist.");
+        if (method === "turn/start") {
+          const model = list.models.find(item => item.model === params.options.model);
+          selection = reasoningSelection(params.options.model, params.options.reasoningLevel, model?.supportedReasoningEfforts ?? []);
+        }
         delete params.options.reasoningLevel; delete params.options.serviceTier;
       }
     }
     await ensureDelegate(options);
+    if (method === "turn/start" || method === "thread/discard" || (method === "thread/stop" && params.intent === "release")) {
+      // Steer injects into an existing turn. Keep that turn's selected effort.
+      gateway!.setReasoning(params.threadId, selection);
+    }
     delegate!.handleLine(JSON.stringify(parsed));
   }
   function handleLine(line: string): void {

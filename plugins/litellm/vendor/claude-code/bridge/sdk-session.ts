@@ -247,6 +247,7 @@ export class SdkSession {
       });
     };
     const recordThreadId = this.options.recordThreadId;
+    const gatewayEnv = corporateClaudeEnv(this.options.model, recordThreadId?.());
     const sdkOptions: Options = {
       abortController: this.abortController,
       cwd: this.options.cwd,
@@ -265,7 +266,7 @@ export class SdkSession {
       includePartialMessages: true,
       settingSources: ["user", "project", "local"],
       persistSession: true,
-      env: this.options.env ?? process.env,
+      env: { ...(this.options.env ?? process.env), ...gatewayEnv },
       stderr: onStderr,
       ...(this.options.mcpServers
         ? { mcpServers: this.options.mcpServers }
@@ -297,7 +298,7 @@ export class SdkSession {
         : {}),
       ...(this.options.plugins ? { plugins: this.options.plugins } : {}),
       ...(this.options.thinking ? { thinking: this.options.thinking } : {}),
-      settings: { ...(typeof this.options.settings === "object" ? this.options.settings : {}), env: corporateClaudeEnv(this.options.model) },
+      settings: { ...(typeof this.options.settings === "object" ? this.options.settings : {}), env: gatewayEnv },
       extraArgs: {
         ...this.options.extraArgs,
         "replay-user-messages": null,

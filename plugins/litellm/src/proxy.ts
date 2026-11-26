@@ -1,23 +1,42 @@
 import { createServer, type Server } from "node:http";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { GatewayOptions } from "./config.js";
 import { readCredential } from "./credentials.js";
+
+import { applyReasoning, type ReasoningSelection } from "./effort.js";
+
+function tokensEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left), b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 const allowed = new Set(["/v1/messages", "/v1/messages/count_tokens", "/v1/responses", "/v1/responses/compact", "/v1/chat/completions", "/v1/models"]);
 export class GatewayProxy {
   readonly token = randomBytes(32).toString("hex");
   private server: Server | undefined;
   private controllers = new Set<AbortController>();
+  private reasoning = new Map<string, ReasoningSelection>();
   baseUrl = "";
   constructor(readonly options: GatewayOptions) {}
+  tokenForThread(threadId?: string | null): string {
+    if (!threadId) return this.token;
+    const scope = Buffer.from(threadId).toString("base64url");
+    return scope + "." + createHmac("sha256", this.token).update(scope).digest("base64url");
+  }
+  setReasoning(threadId: string, selection: ReasoningSelection | undefined): void {
+    if (selection) this.reasoning.set(threadId, selection);
+    else this.reasoning.delete(threadId);
+  }
   async start(): Promise<void> {
     await readCredential(this.options.keyFile);
     this.server = createServer(async (req, res) => {
       const supplied = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? String(req.headers["x-api-key"] ?? "");
-      const a = Buffer.from(supplied), b = Buffer.from(this.token);
-      if (a.length !== b.length || !timingSafeEqual(a, b)) { res.writeHead(401).end(); return; }
+      const encodedScope = supplied.split(".", 1)[0]!;
+      const threadId = supplied.includes(".") ? Buffer.from(encodedScope, "base64url").toString("utf8") : undefined;
+      if (!tokensEqual(supplied, this.tokenForThread(threadId))) { res.writeHead(401).end(); return; }
+      const selection = threadId ? this.reasoning.get(threadId) : undefined;
       const url = new URL(req.url ?? "/", "http://localhost");
       if (!allowed.has(url.pathname) || !["GET", "POST"].includes(req.method ?? "")) { res.writeHead(404).end(); return; }
       if ((url.pathname === "/v1/models") !== (req.method === "GET")) { res.writeHead(405).end(); return; }
@@ -39,7 +58,8 @@ export class GatewayProxy {
           const value = req.headers[name];
           if (typeof value === "string") headers.set(name, value);
         }
-        const body = chunks.length ? Buffer.concat(chunks) : undefined;
+        let body = chunks.length ? Buffer.concat(chunks) : undefined;
+        if (body && selection) body = applyReasoning(body, url.pathname, selection);
         const upstream = await fetch(`${this.options.baseUrl}${url.pathname}${url.search}`, {
           method: req.method, headers, body, signal: controller.signal, redirect: "error",
         });
@@ -71,6 +91,7 @@ export class GatewayProxy {
     this.baseUrl = `http://127.0.0.1:${address.port}`;
   }
   async close(): Promise<void> {
+    this.reasoning.clear();
     for (const controller of this.controllers) controller.abort();
     this.server?.closeAllConnections();
     await new Promise<void>(resolve => this.server ? this.server.close(() => resolve()) : resolve());

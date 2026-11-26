@@ -3,11 +3,12 @@ import { createServer, type Server } from "node:http";
 import { mkdtemp, writeFile, rm, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { reasoningSelection } from "../src/effort.js";
 import { GatewayProxy } from "../src/proxy.js";
 import { parseOptions, normalizedBaseUrl } from "../src/config.js";
 import { parseCredentialFile, readCredential } from "../src/credentials.js";
 import { CatalogClient, parseCatalog } from "../src/catalog.js";
-import { corporateCodexConfig, corporateCodexLaunch, corporateClaudeEnv, setGatewayProxy } from "../src/runtime.js";
+import { corporateCodexConfig, corporateCodexEnv, corporateCodexLaunch, corporateClaudeEnv, setGatewayProxy } from "../src/runtime.js";
 
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn(); });
@@ -39,19 +40,76 @@ describe("corporate gateway", () => {
     const calls: string[] = [], auth: unknown[] = [];
     const { options, keyFile } = await fixture((req, res) => {
       calls.push(req.url!); auth.push(req.headers.authorization);
+      if (req.url === "/model/info") { res.writeHead(403).end(); return; }
       res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ data: [{ id: "model-a" }, { id: "EmbeddingGemma" }] }));
     });
     const client = new CatalogClient();
     expect((await client.list(options)).models.map(x => x.id)).toEqual(["model-a"]);
-    await client.list(options); expect(calls).toEqual(["/v1/models"]);
+    await client.list(options); expect(calls.sort()).toEqual(["/model/info", "/v1/models"]);
     await writeFile(keyFile, "LITELLM_API_KEY=rotated-secret\n"); await client.list(options);
-    expect(auth).toEqual(["Bearer test-corporate-secret", "Bearer rotated-secret"]);
+    expect(auth).toEqual(["Bearer test-corporate-secret", "Bearer test-corporate-secret", "Bearer rotated-secret", "Bearer rotated-secret"]);
   });
   it("keeps display names, maps explicit aliases, filters non-chat models and scopes defaults", () => {
     const options = parseOptions({ engine: "codex", keyFile: "/tmp/key", modelAliases: { "Corporate GPT": "gpt-canonical" }, modelAllowlist: ["Corporate GPT"], defaultModel: "gpt-canonical" });
     const result = parseCatalog({ data: [{ id: "Corporate GPT" }, { id: "other" }, { id: "embed" }] }, options);
     expect(result.models).toHaveLength(1);
     expect(result.models[0]).toMatchObject({ id: "gpt-canonical", displayName: "Corporate GPT", isDefault: true, supportedReasoningEfforts: [] });
+  });
+  it("discovers effort only for supported model deployments and keeps BB's legacy medium selection at gateway default", () => {
+    const gpt = "Corporate GPT";
+    const options = parseOptions({ engine: "codex", keyFile: "/tmp/key", modelAliases: { [gpt]: "gpt-6.1-sol" } });
+    const data = { data: [{ id: gpt }, { id: "Unknown" }] };
+    const deployment = { litellm_params: { model: "openai/gpt-6.1-sol" }, model_info: { supports_reasoning: true } };
+    const limited = { ...deployment, model_info: { supports_max_reasoning_effort: false } };
+    const catalog = parseCatalog(data, options, new Map([[gpt, [deployment, limited]]]));
+    const model = catalog.models[0]!;
+    expect(model.defaultReasoningEffort).toBe("effort-default");
+    expect(model.supportedReasoningEfforts.map(level => level.reasoningEffort))
+      .toEqual(["effort-default", "effort-low", "effort-medium", "effort-high", "effort-xhigh"]);
+    expect(catalog.models[1]!.supportedReasoningEfforts).toEqual([]);
+    expect(reasoningSelection(model.id, "medium", model.supportedReasoningEfforts)?.effort).toBeUndefined();
+    expect(reasoningSelection(model.id, "effort-medium", model.supportedReasoningEfforts)?.effort).toBe("medium");
+  });
+  it("sets the selected effort on both routes and isolates concurrent chats using the same model", async () => {
+    const { options } = await fixture(async (_req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of _req) chunks.push(chunk);
+      res.setHeader("content-type", "application/json");
+      res.end(Buffer.concat(chunks));
+    });
+    const proxy = new GatewayProxy(options);
+    await proxy.start();
+    cleanup.push(() => proxy.close());
+    setGatewayProxy(proxy);
+    proxy.setReasoning("first", { model: "selected", effort: "max" });
+    proxy.setReasoning("second", { model: "selected", effort: "low" });
+    async function send(path: string, token: string, payload: object) {
+      const response = await fetch(proxy.baseUrl + path, {
+        method: "POST", headers: { authorization: "Bearer " + token }, body: JSON.stringify(payload),
+      });
+      expect(response.status).toBe(200);
+      return response.json();
+    }
+    const first = corporateClaudeEnv("selected", "first").ANTHROPIC_AUTH_TOKEN!;
+    const second = corporateCodexEnv("second").LITELLM_BRIDGE_TOKEN!;
+    const payload = { model: "selected", reasoning: { effort: "high", summary: "auto" } };
+    const outputFormat = { type: "json_schema" };
+    const [messages, responses] = await Promise.all([
+      send("/v1/messages", first, { ...payload, output_config: { effort: "medium", format: outputFormat } }),
+      send("/v1/responses", second, payload),
+    ]);
+    expect(messages).toEqual({ ...payload, reasoning: { effort: "max", summary: "auto" }, output_config: { format: outputFormat } });
+    expect(responses).toEqual({ ...payload, reasoning: { effort: "low", summary: "auto" } });
+
+    proxy.setReasoning("first", { model: "selected" });
+    expect(await send("/v1/messages", first, { ...payload, output_config: { effort: "medium" } }))
+      .toEqual({ model: "selected", reasoning: { summary: "auto" } });
+    expect(await send("/v1/responses", first, { model: "selected", reasoning: { effort: "high" } }))
+      .toEqual({ model: "selected" });
+    const other = { ...payload, model: "other" };
+    expect(await send("/v1/messages", first, other)).toEqual(other);
+    expect(await send("/v1/messages/count_tokens", first, payload)).toEqual(payload);
+    expect((await fetch(proxy.baseUrl + "/v1/models", { headers: { authorization: "Bearer " + first + "fake" } })).status).toBe(401);
   });
   it("rejects unauthenticated proxy access and streams both API formats with replaced auth", async () => {
     const requests: { url: string; auth: unknown; key: unknown; body: string }[] = [];

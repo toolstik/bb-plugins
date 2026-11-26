@@ -5,17 +5,17 @@ function active(): GatewayProxy {
   if (!proxy?.baseUrl) throw new Error("Corporate LiteLLM is not configured. Personal login fallback is disabled.");
   return proxy;
 }
-export function corporateClaudeEnv(model?: string): Record<string, string> {
+export function corporateClaudeEnv(model?: string, threadId?: string): Record<string, string> {
   const gateway = active();
   return {
-    ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.token, ANTHROPIC_API_KEY: "",
+    ANTHROPIC_BASE_URL: gateway.baseUrl, ANTHROPIC_AUTH_TOKEN: gateway.tokenForThread(threadId), ANTHROPIC_API_KEY: "",
     CLAUDE_CODE_OAUTH_TOKEN: "", CLAUDE_CODE_USE_BEDROCK: "0", CLAUDE_CODE_USE_VERTEX: "0", CLAUDE_CODE_USE_FOUNDRY: "0",
     CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
     ...(model ? { ANTHROPIC_MODEL: model, ANTHROPIC_DEFAULT_OPUS_MODEL: model, ANTHROPIC_DEFAULT_SONNET_MODEL: model, ANTHROPIC_DEFAULT_HAIKU_MODEL: model, ANTHROPIC_SMALL_FAST_MODEL: model } : {}),
   };
 }
-export function corporateCodexEnv(): Record<string, string> {
-  return { LITELLM_BRIDGE_TOKEN: active().token, OPENAI_API_KEY: "", OPENAI_BASE_URL: `${active().baseUrl}/v1` };
+export function corporateCodexEnv(threadId?: string | null): Record<string, string> {
+  return { LITELLM_BRIDGE_TOKEN: active().tokenForThread(threadId), OPENAI_API_KEY: "", OPENAI_BASE_URL: `${active().baseUrl}/v1` };
 }
 export function corporateCodexConfig(): Record<string, string | boolean> {
   return {

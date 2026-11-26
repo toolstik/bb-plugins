@@ -15,12 +15,29 @@
  import { experimental_spawnHostProcess as spawn } from "@get-bb/plugin-sdk/process";
  import {
    query,
-@@ -296,7 +297,7 @@
+@@ -246,6 +247,7 @@
+       });
+     };
+     const recordThreadId = this.options.recordThreadId;
++    const gatewayEnv = corporateClaudeEnv(this.options.model, recordThreadId?.());
+     const sdkOptions: Options = {
+       abortController: this.abortController,
+       cwd: this.options.cwd,
+@@ -264,7 +266,7 @@
+       includePartialMessages: true,
+       settingSources: ["user", "project", "local"],
+       persistSession: true,
+-      env: this.options.env ?? process.env,
++      env: { ...(this.options.env ?? process.env), ...gatewayEnv },
+       stderr: onStderr,
+       ...(this.options.mcpServers
+         ? { mcpServers: this.options.mcpServers }
+@@ -296,7 +298,7 @@
          : {}),
        ...(this.options.plugins ? { plugins: this.options.plugins } : {}),
        ...(this.options.thinking ? { thinking: this.options.thinking } : {}),
 -      ...(this.options.settings ? { settings: this.options.settings } : {}),
-+      settings: { ...(typeof this.options.settings === "object" ? this.options.settings : {}), env: corporateClaudeEnv(this.options.model) },
++      settings: { ...(typeof this.options.settings === "object" ? this.options.settings : {}), env: gatewayEnv },
        extraArgs: {
          ...this.options.extraArgs,
          "replay-user-messages": null,
@@ -97,16 +114,29 @@
  }
  
  function appServerLaunchEnv(
-@@ -413,7 +382,7 @@
+@@ -410,10 +379,11 @@
+ 
+ function buildAppServerEnv(
+   envVars: Readonly<Record<string, string>> | undefined,
++  threadId: string | null,
  ): NodeJS.ProcessEnv {
    return withoutBridgeRuntimeEnv(
      sanitizeInheritedChildProcessEnv({
 -      env: appServerLaunchEnv(envVars),
-+      env: { ...appServerLaunchEnv(envVars), ...corporateCodexEnv() },
++      env: { ...appServerLaunchEnv(envVars), ...corporateCodexEnv(threadId) },
      }),
    );
  }
-@@ -2782,3 +2751,7 @@
+@@ -997,7 +967,7 @@
+   ) => void;
+   onExit: (info: CodexAppServerExitInfo) => void;
+ }): CodexAppServerConnection {
+-  const env = buildAppServerEnv(callbacks.envVars);
++  const env = buildAppServerEnv(callbacks.envVars, callbacks.recordThreadId);
+   const launch = resolveAppServerLaunch(appServerLaunchEnv(callbacks.envVars));
+   const { envVars: _envVars, ...connectionCallbacks } = callbacks;
+   return createCodexAppServerConnection({
+@@ -2782,3 +2752,7 @@
      process.exit(0);
    },
  });

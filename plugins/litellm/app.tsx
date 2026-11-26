@@ -56,7 +56,7 @@ function BehaviorSettings() {
   return <div className="space-y-2 text-sm" data-bb-plugin="litellm" data-bb-plugin-root="litellm">
     <p>LiteLLM / Claude Code использует настройки плагина Claude Code. LiteLLM / Codex использует настройки плагина Codex.</p>
     <p className="text-muted-foreground">Память, субагенты и другие поддерживаемые параметры поведения настраиваются в основных провайдерах и применяются со следующего сообщения. Настройки моделей и подключения задаются здесь, в LiteLLM Agents.</p>
-    <p className="text-muted-foreground">Chrome и Artifacts требуют соответствующих возможностей и авторизации основного Claude Code. Reasoning и Fast не наследуются: их поддержка зависит от корпоративной модели.</p>
+    <p className="text-muted-foreground">Chrome и Artifacts требуют соответствующих возможностей и авторизации основного Claude Code. Уровень reasoning для поддерживаемой корпоративной модели выбирается в чате рядом с моделью.</p>
   </div>;
 }
 export default definePluginApp(app => {
