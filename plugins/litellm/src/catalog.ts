@@ -24,7 +24,7 @@ export function parseCatalog(data: unknown, options: GatewayOptions, info = new 
     if (options.modelAllowlist.length && !options.modelAllowlist.includes(id) && !options.modelAllowlist.includes(model)) continue;
     if (seen.has(model)) continue;
     seen.add(model);
-    const supportedReasoningEfforts = modelEfforts(id, model, info);
+    const supportedReasoningEfforts = modelEfforts(options.baseUrl, id, model, info);
     models.push({ id: model, model, displayName: id, description: "Corporate LiteLLM. Agent compatibility depends on the upstream model.",
       reasoningDiscovery: "known", supportedReasoningEfforts, defaultReasoningEffort: supportedReasoningEfforts.length ? defaultEffort : "medium", isDefault: false });
     if (models.length === 1000) break;

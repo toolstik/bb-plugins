@@ -1,4 +1,5 @@
 import type { ModelReasoningEffort } from "@get-bb/plugin-sdk/provider-bridge";
+import { corporateBaseUrl } from "./config.js";
 
 const levels = ["none", "low", "medium", "high", "xhigh", "max"] as const;
 type Effort = typeof levels[number];
@@ -24,16 +25,34 @@ const modelProfiles = new Map<string, readonly Effort[]>([
   ["gpt-6.1-sol", maximum],
 ]);
 
+// Exact deployment IDs verified via the corporate gateway's /model/info.
+// Used only for effort discovery when metadata for a deployment is missing.
+const corporateProfiles = new Map([
+  ["01 Top - Anthropic - Claude Fable 5.1", "claude-fable-5-1"],
+  ["01 Top - Anthropic - Claude Opus 5.5", "claude-opus-5-5"],
+  ["02 Coding - Anthropic - Claude Sonnet 5", "claude-sonnet-5"],
+  ["01 Top - OpenAI - GPT-5.6 Sol", "gpt-5.6-sol"],
+  ["01 Top - OpenAI - GPT-5.6 Terra", "gpt-5.6-terra"],
+  ["01 Top - OpenAI - GPT-6 Astra", "gpt-6-astra"],
+  ["01 Top - OpenAI - GPT-6 Sol", "gpt-6-sol"],
+  ["01 Top - OpenAI - GPT-6.1 Sol", "gpt-6.1-sol"],
+  ["02 Coding - OpenAI - GPT-5.3-Codex", "gpt-5.3-codex"],
+  ["04 Fast - OpenAI - GPT-5.4 Mini", "gpt-5.4-mini"],
+  ["04 Fast - OpenAI - GPT-5.6 Luna", "gpt-5.6-luna"],
+  ["04 Fast - OpenAI - GPT-6 Luna", "gpt-6-luna"],
+]);
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-export function modelEfforts(id: string, model: string, info: Map<string, unknown[]>): ModelReasoningEffort[] {
+export function modelEfforts(baseUrl: string, id: string, model: string, info: Map<string, unknown[]>): ModelReasoningEffort[] {
   function profile(name: string) {
     const canonical = name.split("/").at(-1)!.toLowerCase();
     const modelId = canonical.startsWith("claude-") ? canonical.replaceAll(".", "-") : canonical;
     return modelProfiles.get(modelId) ?? [];
   }
+  const confirmedModel = baseUrl === corporateBaseUrl && model === id ? corporateProfiles.get(id) : undefined;
   const deployments = info.get(model) ?? info.get(id);
   const supported = deployments ? levels.filter(level => deployments.every(deployment => {
     const row = record(deployment);
@@ -43,7 +62,7 @@ export function modelEfforts(id: string, model: string, info: Map<string, unknow
       && meta?.supports_reasoning !== false
       && meta?.["supports_" + level + "_reasoning_effort"] !== false
       && profile(upstream).includes(level);
-  })) : profile(model);
+  })) : profile(confirmedModel ?? model);
   if (!supported.length) return [];
   return [
     { reasoningEffort: defaultEffort, description: "Использовать уровень по умолчанию на шлюзе." },

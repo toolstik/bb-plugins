@@ -2,11 +2,13 @@ import { z } from "zod";
 import { homedir } from "node:os";
 import { resolve, isAbsolute } from "node:path";
 
+export const corporateBaseUrl = "https://llm.finstar-ai.cc";
+
 export const engineSchema = z.enum(["claude-code", "codex"]);
 export type Engine = z.infer<typeof engineSchema>;
 export const gatewayOptionsSchema = z.object({
   engine: engineSchema,
-  baseUrl: z.string().url().default("https://llm.finstar-ai.cc"),
+  baseUrl: z.string().url().default(corporateBaseUrl),
   keyFile: z.string().min(1),
   executable: z.string().default(""),
   modelAliases: z.record(z.string(), z.string().min(1)).default({}),

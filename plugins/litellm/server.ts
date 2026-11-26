@@ -4,7 +4,7 @@ import { usageHostContract, usageSourceRpcContract } from "./usage-contract.js";
 import { credentialHostContract, credentialRpcContract } from "./credential-contract.js";
 import type { BbPluginApi, PluginProviderDeclaration } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { normalizedBaseUrl } from "./src/config.js";
+import { corporateBaseUrl, normalizedBaseUrl } from "./src/config.js";
 import { codexExtensionKinds } from "./vendor/codex/extension-kinds.js";
 
 const jsonObject = z.string().refine(value => {
@@ -16,7 +16,7 @@ const jsonList = z.string().refine(value => {
 
 export default async function plugin(bb: BbPluginApi) {
   const settings = bb.settings.define({
-    baseUrl: { type: "string", label: "LiteLLM URL", default: "https://llm.finstar-ai.cc", experimental_schema: z.string().refine(value => { try { normalizedBaseUrl(value); return true; } catch { return false; } }, "Use HTTPS without credentials or query parameters.") },
+    baseUrl: { type: "string", label: "LiteLLM URL", default: corporateBaseUrl, experimental_schema: z.string().refine(value => { try { normalizedBaseUrl(value); return true; } catch { return false; } }, "Use HTTPS without credentials or query parameters.") },
     keyFile: { type: "string", label: "Private credential file on each execution host", description: "Absolute path or ~/. The file must contain LITELLM_API_KEY and have mode 600. Never paste the key here.", default: "~/.config/bb-litellm/credentials.env" },
     claudeExecutable: { type: "string", label: "Claude Code executable (empty: installed claude)", default: "" },
     codexExecutable: { type: "string", label: "Codex executable (empty: installed codex)", default: "" },

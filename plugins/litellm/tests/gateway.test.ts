@@ -70,6 +70,20 @@ describe("corporate gateway", () => {
     expect(reasoningSelection(model.id, "medium", model.supportedReasoningEfforts)?.effort).toBeUndefined();
     expect(reasoningSelection(model.id, "effort-medium", model.supportedReasoningEfforts)?.effort).toBe("medium");
   });
+  it("retains confirmed corporate effort profiles when deployment metadata is unavailable", () => {
+    const sonnet = "02 Coding - Anthropic - Claude Sonnet 5";
+    const gpt = "01 Top - OpenAI - GPT-6 Sol";
+    const data = { data: [{ id: sonnet }, { id: gpt }, { id: "Other Claude" }] };
+    const options = parseOptions({ engine: "claude-code", keyFile: "/tmp/key" });
+    const models = parseCatalog(data, options).models;
+    expect(models.map(model => model.supportedReasoningEfforts.length)).toEqual([6, 7, 0]);
+    expect(models.map(model => model.model)).toEqual([sonnet, gpt, "Other Claude"]);
+    const otherGateway = parseCatalog(data, { ...options, baseUrl: "https://example.com" });
+    expect(otherGateway.models.every(model => model.supportedReasoningEfforts.length === 0)).toBe(true);
+    const disabled = { litellm_params: { model: "anthropic/claude-sonnet-5" }, model_info: { supports_reasoning: false } };
+    const live = parseCatalog(data, options, new Map([[sonnet, [disabled]]]));
+    expect(live.models[0]?.supportedReasoningEfforts).toEqual([]);
+  });
   it("offers the same levels for Anthropic and OpenAI models through either agent", () => {
     const gpt = "Corporate GPT";
     const claude = "Corporate Claude";
